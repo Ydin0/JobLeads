@@ -71,7 +71,7 @@ export async function runLinkedInJobsSearch(
   // Fetch results from the run's dataset
   const { items } = await apifyClient.dataset(run.defaultDatasetId).listItems();
 
-  return items as LinkedInJobResult[];
+  return items as unknown as LinkedInJobResult[];
 }
 
 // Extract unique companies from job results

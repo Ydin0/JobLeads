@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils'
 interface CreateSearchModalProps {
     open: boolean
     onOpenChange: (open: boolean) => void
+    onSearchCreated?: (search: { id: string }) => void
 }
 
 const jobBoards = [
@@ -74,8 +75,9 @@ const steps = [
     { id: 5, name: 'Summary', icon: Check },
 ]
 
-export function CreateSearchModal({ open, onOpenChange }: CreateSearchModalProps) {
+export function CreateSearchModal({ open, onOpenChange, onSearchCreated }: CreateSearchModalProps) {
     const [currentStep, setCurrentStep] = useState(1)
+    const [isSubmitting, setIsSubmitting] = useState(false)
     const [formData, setFormData] = useState({
         name: '',
         jobBoards: ['linkedin'] as string[],
