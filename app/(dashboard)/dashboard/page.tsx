@@ -308,7 +308,7 @@ export default function DashboardPage() {
                                                         {lead.status}
                                                     </span>
                                                 </div>
-                                                <div className="text-xs text-white/40 truncate">{lead.title || 'No title'}</div>
+                                                <div className="text-xs text-white/40 truncate">{lead.jobTitle || 'No title'}</div>
                                             </div>
                                         </div>
                                         <div className="mt-2 flex items-center justify-between">
