@@ -3,8 +3,13 @@ import { NextResponse } from "next/server";
 
 const isProtectedRoute = createRouteMatcher(["/dashboard(.*)"]);
 const isOnboardingRoute = createRouteMatcher(["/onboarding(.*)"]);
+const isPublicApiRoute = createRouteMatcher(["/api/webhooks(.*)"]);
 
 export default clerkMiddleware(async (auth, req) => {
+  // Skip auth for public API routes (webhooks)
+  if (isPublicApiRoute(req)) {
+    return;
+  }
   const { userId, orgId } = await auth();
 
   // If accessing protected routes, require authentication
