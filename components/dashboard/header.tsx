@@ -2,6 +2,7 @@
 
 import { Bell, Menu, Search, Command } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { UserButton } from '@clerk/nextjs'
 
 export function DashboardHeader() {
     return (
@@ -45,10 +46,15 @@ export function DashboardHeader() {
                         </span>
                     </Button>
 
-                    <div className="ml-2 flex items-center gap-3">
-                        <div className="relative size-8 overflow-hidden rounded-full bg-gradient-to-br from-purple-500 to-blue-500 ring-2 ring-white/10">
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
-                        </div>
+                    <div className="ml-2">
+                        <UserButton
+                            afterSignOutUrl="/"
+                            appearance={{
+                                elements: {
+                                    avatarBox: "size-8 ring-2 ring-white/10",
+                                },
+                            }}
+                        />
                     </div>
                 </div>
             </div>
