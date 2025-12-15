@@ -20,6 +20,7 @@ import { CreateSearchModal } from '@/components/dashboard/create-search-modal'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { useSearches } from '@/hooks/use-searches'
+import { toast } from 'sonner'
 
 export default function SearchesPage() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -29,11 +30,21 @@ export default function SearchesPage() {
     const handleRunSearch = async (id: string) => {
         try {
             setRunningSearchId(id)
+            toast.loading('Running search...', {
+                id: `search-${id}`,
+                description: 'Scraping LinkedIn jobs. This may take 1-2 minutes.',
+            })
             const result = await runSearch(id)
-            alert(`Search completed! Found ${result.jobsFound} jobs from ${result.companiesFound} companies.`)
+            toast.success('Search completed!', {
+                id: `search-${id}`,
+                description: `Found ${result.jobsFound} jobs from ${result.companiesFound} companies.`,
+            })
         } catch (error) {
             console.error('Error running search:', error)
-            alert(error instanceof Error ? error.message : 'Failed to run search. Please try again.')
+            toast.error('Search failed', {
+                id: `search-${id}`,
+                description: error instanceof Error ? error.message : 'Please try again.',
+            })
         } finally {
             setRunningSearchId(null)
         }

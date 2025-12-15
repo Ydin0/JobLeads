@@ -27,29 +27,27 @@ export interface LinkedInJobsInput {
 
 // Output types from LinkedIn Jobs Scraper
 export interface LinkedInJobResult {
-  id: string;
+  id?: string;
   title: string;
-  url: string;
-  referenceId: string;
-  posterId: string;
-  company: {
-    name: string;
-    url: string;
-    logo?: string;
-    id?: string;
-  };
+  jobUrl: string;
   location: string;
-  type?: string;
+  postedTime?: string;
   publishedAt: string;
-  salary?: string;
-  applicationsCount?: string;
+  companyName: string;
+  companyUrl: string;
+  companyId?: string;
   description?: string;
-  descriptionHtml?: string;
-  skills?: string[];
-  industries?: string[];
-  seniorityLevel?: string;
-  employmentType?: string;
-  jobFunctions?: string[];
+  applicationsCount?: string;
+  contractType?: string;
+  experienceLevel?: string;
+  workType?: string;
+  sector?: string;
+  salary?: string;
+  posterFullName?: string;
+  posterProfileUrl?: string;
+  applyUrl?: string;
+  applyType?: string;
+  benefits?: string;
 }
 
 // Run LinkedIn Jobs search
@@ -65,11 +63,16 @@ export async function runLinkedInJobsSearch(
     ...input,
   };
 
+  console.log("[Apify] Running actor with input:", JSON.stringify(defaultInput, null, 2));
+  console.log("[Apify] Actor ID:", LINKEDIN_JOBS_ACTOR_ID);
+
   // Run the Actor and wait for it to finish
   const run = await apifyClient.actor(LINKEDIN_JOBS_ACTOR_ID).call(defaultInput);
+  console.log("[Apify] Actor run completed. Run ID:", run.id, "Dataset ID:", run.defaultDatasetId);
 
   // Fetch results from the run's dataset
   const { items } = await apifyClient.dataset(run.defaultDatasetId).listItems();
+  console.log("[Apify] Fetched", items.length, "items from dataset");
 
   return items as unknown as LinkedInJobResult[];
 }
@@ -89,7 +92,13 @@ export function extractCompaniesFromJobs(jobs: LinkedInJobResult[]) {
   >();
 
   for (const job of jobs) {
-    const companyKey = job.company.name.toLowerCase();
+    // Skip jobs without company data
+    if (!job.companyName) {
+      console.log("[Apify] Skipping job without company name:", job.id || job.title);
+      continue;
+    }
+
+    const companyKey = job.companyName.toLowerCase();
     const existing = companiesMap.get(companyKey);
 
     if (existing) {
@@ -97,15 +106,15 @@ export function extractCompaniesFromJobs(jobs: LinkedInJobResult[]) {
       existing.jobs.push(job);
     } else {
       companiesMap.set(companyKey, {
-        name: job.company.name,
-        linkedinUrl: job.company.url,
-        logoUrl: job.company.logo,
-        linkedinId: job.company.id,
+        name: job.companyName,
+        linkedinUrl: job.companyUrl || "",
+        linkedinId: job.companyId,
         jobCount: 1,
         jobs: [job],
       });
     }
   }
 
+  console.log("[Apify] Extracted", companiesMap.size, "unique companies from", jobs.length, "jobs");
   return Array.from(companiesMap.values());
 }

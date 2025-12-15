@@ -11,8 +11,10 @@ import {
     Calendar,
     Check,
     Sparkles,
+    Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 interface CreateSearchModalProps {
     open: boolean
@@ -78,6 +80,7 @@ const steps = [
 export function CreateSearchModal({ open, onOpenChange, onSearchCreated }: CreateSearchModalProps) {
     const [currentStep, setCurrentStep] = useState(1)
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [isRunning, setIsRunning] = useState(false)
     const [formData, setFormData] = useState({
         name: '',
         jobBoards: ['linkedin'] as string[],
@@ -169,30 +172,55 @@ export function CreateSearchModal({ open, onOpenChange, onSearchCreated }: Creat
 
             const newSearch = await response.json()
             onSearchCreated?.(newSearch)
-            handleClose()
 
-            // Run immediately if requested
-            if (runImmediately) {
-                alert('Search created! Now running... This may take a few minutes. You can navigate away and check back later.')
-                try {
-                    const runResponse = await fetch(`/api/searches/${newSearch.id}/run`, {
-                        method: 'POST',
+            if (!runImmediately) {
+                toast.success('Search created successfully', {
+                    description: 'You can run it from the searches page.',
+                })
+                handleClose()
+                return
+            }
+
+            // Run immediately
+            setIsRunning(true)
+            toast.loading('Running search...', {
+                id: 'search-running',
+                description: 'Scraping LinkedIn jobs. This may take 1-2 minutes.',
+            })
+
+            try {
+                const runResponse = await fetch(`/api/searches/${newSearch.id}/run`, {
+                    method: 'POST',
+                })
+
+                if (runResponse.ok) {
+                    const result = await runResponse.json()
+                    toast.success('Search completed!', {
+                        id: 'search-running',
+                        description: `Found ${result.jobsFound} jobs from ${result.companiesFound} companies.`,
                     })
-                    if (runResponse.ok) {
-                        const result = await runResponse.json()
-                        alert(`Search completed! Found ${result.jobsFound} jobs from ${result.companiesFound} companies.`)
-                    } else {
-                        const error = await runResponse.json()
-                        alert(`Search failed: ${error.details || error.error || 'Unknown error'}`)
-                    }
-                } catch (runError) {
-                    console.error('Error running search:', runError)
-                    alert('Search was created but failed to run. You can try running it manually from the searches page.')
+                } else {
+                    const error = await runResponse.json()
+                    toast.error('Search failed', {
+                        id: 'search-running',
+                        description: error.details || error.error || 'Unknown error',
+                    })
                 }
+            } catch (runError) {
+                console.error('Error running search:', runError)
+                toast.error('Search failed to run', {
+                    id: 'search-running',
+                    description: 'You can try running it manually from the searches page.',
+                })
+            } finally {
+                setIsRunning(false)
+                handleClose()
             }
         } catch (error) {
             console.error('Error creating search:', error)
-            alert('Failed to create search. Please try again.')
+            toast.error('Failed to create search', {
+                description: 'Please try again.',
+            })
         } finally {
             setIsSubmitting(false)
         }
@@ -205,11 +233,33 @@ export function CreateSearchModal({ open, onOpenChange, onSearchCreated }: Creat
             {/* Backdrop */}
             <div
                 className="absolute inset-0 bg-black/70 backdrop-blur-md"
-                onClick={handleClose}
+                onClick={!isRunning ? handleClose : undefined}
             />
 
             {/* Modal */}
             <div className="relative flex h-[580px] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0f]/95 shadow-2xl shadow-purple-500/5 backdrop-blur-xl">
+                {/* Running Overlay */}
+                {isRunning && (
+                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#0a0a0f]/95 backdrop-blur-sm">
+                        <div className="relative">
+                            <div className="absolute inset-0 animate-ping rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 opacity-20" />
+                            <div className="relative flex size-16 items-center justify-center rounded-full bg-gradient-to-r from-blue-500 to-cyan-500">
+                                <Loader2 className="size-8 animate-spin text-white" />
+                            </div>
+                        </div>
+                        <h3 className="mt-6 text-lg font-semibold text-white">Running Search</h3>
+                        <p className="mt-2 text-center text-sm text-white/40">
+                            Scraping LinkedIn jobs for "{formData.jobTitle || 'all positions'}"
+                            {formData.jobLocation && ` in ${formData.jobLocation}`}
+                        </p>
+                        <p className="mt-1 text-xs text-white/30">This may take 1-2 minutes...</p>
+                        <div className="mt-6 flex items-center gap-2">
+                            <div className="size-2 animate-bounce rounded-full bg-blue-500" style={{ animationDelay: '0ms' }} />
+                            <div className="size-2 animate-bounce rounded-full bg-cyan-500" style={{ animationDelay: '150ms' }} />
+                            <div className="size-2 animate-bounce rounded-full bg-blue-500" style={{ animationDelay: '300ms' }} />
+                        </div>
+                    </div>
+                )}
                 {/* Gradient accents */}
                 <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-purple-500/50 to-transparent" />
                 <div className="absolute -left-20 -top-20 size-40 rounded-full bg-blue-500/10 blur-3xl" />

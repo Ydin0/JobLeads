@@ -17,8 +17,10 @@ type RouteContext = { params: Promise<{ id: string }> };
 // POST /api/searches/[id]/run - Execute a search and store results
 export async function POST(req: Request, { params }: RouteContext) {
   try {
+    console.log("[Search Run] Starting search execution...");
     const { orgId } = await requireOrgAuth();
     const { id } = await params;
+    console.log("[Search Run] Org ID:", orgId, "Search ID:", id);
 
     // Get the search
     const search = await db.query.searches.findFirst({
@@ -26,8 +28,10 @@ export async function POST(req: Request, { params }: RouteContext) {
     });
 
     if (!search) {
+      console.log("[Search Run] Search not found");
       return NextResponse.json({ error: "Search not found" }, { status: 404 });
     }
+    console.log("[Search Run] Found search:", search.name);
 
     // Build Apify input from search filters
     const filters = search.filters as {
@@ -45,9 +49,12 @@ export async function POST(req: Request, { params }: RouteContext) {
       companyId: filters?.companyIds || [],
       rows: 100,
     };
+    console.log("[Search Run] Apify input:", JSON.stringify(apifyInput, null, 2));
 
     // Run the LinkedIn Jobs search
+    console.log("[Search Run] Starting Apify actor... (this may take a few minutes)");
     const jobResults = await runLinkedInJobsSearch(apifyInput);
+    console.log("[Search Run] Apify returned", jobResults.length, "jobs");
 
     // Extract unique companies from results
     const extractedCompanies = extractCompaniesFromJobs(jobResults);
@@ -69,11 +76,12 @@ export async function POST(req: Request, { params }: RouteContext) {
             jobs: company.jobs.map((job) => ({
               id: job.id,
               title: job.title,
-              url: job.url,
+              url: job.jobUrl,
               location: job.location,
               publishedAt: job.publishedAt,
-              type: job.type,
+              contractType: job.contractType,
               salary: job.salary,
+              experienceLevel: job.experienceLevel,
             })),
           },
         })
