@@ -6,7 +6,6 @@ import {
     Search,
     Download,
     MoreHorizontal,
-    ExternalLink,
     Mail,
     ChevronLeft,
     ChevronRight,

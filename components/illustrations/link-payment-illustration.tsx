@@ -27,7 +27,7 @@ const MainIllustration = () => (
 
                 <div className="bg-foreground/5 ring-foreground/10 flex flex-col gap-2 rounded-md border border-transparent p-4 shadow ring-1">
                     <div className="text-foreground mb-1 text-sm font-medium">Checkout with Link</div>
-                    <div className="text-muted-foreground text-sm">It looks like you've saved info to checkout with Link before. Enter the code sent to your phone to complete your purchase.</div>
+                    <div className="text-muted-foreground text-sm">It looks like you&apos;ve saved info to checkout with Link before. Enter the code sent to your phone to complete your purchase.</div>
 
                     <div className="mx-auto mb-3 mt-5 grid w-56 grid-cols-2 gap-4">
                         <div className="*:hover:ring-foreground/15 grid grid-cols-3 gap-1.5">
