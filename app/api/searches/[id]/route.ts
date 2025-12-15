@@ -17,6 +17,7 @@ export async function GET(_req: Request, { params }: RouteContext) {
       with: {
         companies: true,
         leads: true,
+        jobs: true,
       },
     });
 

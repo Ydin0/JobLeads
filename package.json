@@ -31,6 +31,7 @@
     "motion": "^12.23.26",
     "next": "15.5.9",
     "next-themes": "^0.4.6",
+    "peopledatalabs": "^14.1.0",
     "react": "19.2.1",
     "react-dom": "19.2.1",
     "sonner": "^2.0.7",

@@ -17,19 +17,21 @@ import {
     Loader2,
 } from 'lucide-react'
 import { CreateSearchModal } from '@/components/dashboard/create-search-modal'
+import { SearchDetailDialog } from '@/components/dashboard/search-detail-dialog'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { useSearches } from '@/hooks/use-searches'
+import { useRunningSearches } from '@/hooks/use-running-searches'
 import { toast } from 'sonner'
 
 export default function SearchesPage() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-    const [runningSearchId, setRunningSearchId] = useState<string | null>(null)
+    const [selectedSearchId, setSelectedSearchId] = useState<string | null>(null)
     const { searches, isLoading, fetchSearches, runSearch, updateSearch, deleteSearch } = useSearches()
+    const { isRunning } = useRunningSearches()
 
     const handleRunSearch = async (id: string) => {
         try {
-            setRunningSearchId(id)
             toast.loading('Running search...', {
                 id: `search-${id}`,
                 description: 'Scraping LinkedIn jobs. This may take 1-2 minutes.',
@@ -37,7 +39,7 @@ export default function SearchesPage() {
             const result = await runSearch(id)
             toast.success('Search completed!', {
                 id: `search-${id}`,
-                description: `Found ${result.jobsFound} jobs from ${result.companiesFound} companies.`,
+                description: `Found ${result.jobsFound} jobs, ${result.companiesFound} companies${result.leadsCreated ? `, and ${result.leadsCreated} contacts` : ''}.`,
             })
         } catch (error) {
             console.error('Error running search:', error)
@@ -45,8 +47,6 @@ export default function SearchesPage() {
                 id: `search-${id}`,
                 description: error instanceof Error ? error.message : 'Please try again.',
             })
-        } finally {
-            setRunningSearchId(null)
         }
     }
 
@@ -151,7 +151,8 @@ export default function SearchesPage() {
                         return (
                             <div
                                 key={search.id}
-                                className="group relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02] backdrop-blur-sm transition-all hover:border-white/10 hover:bg-white/[0.04]">
+                                onClick={() => setSelectedSearchId(search.id)}
+                                className="group relative cursor-pointer overflow-hidden rounded-xl border border-white/5 bg-white/[0.02] backdrop-blur-sm transition-all hover:border-white/10 hover:bg-white/[0.04]">
                                 <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
                                 <div className="absolute -right-20 -top-20 size-40 rounded-full bg-blue-500/5 blur-3xl" />
 
@@ -164,24 +165,39 @@ export default function SearchesPage() {
                                             <div>
                                                 <div className="flex items-center gap-2">
                                                     <h3 className="text-sm font-medium text-white">{search.name}</h3>
-                                                    <div className="relative flex size-1.5">
-                                                        {search.status === 'active' && (
-                                                            <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75"></span>
-                                                        )}
-                                                        <span
-                                                            className={`relative inline-flex size-1.5 rounded-full ${
-                                                                search.status === 'active' ? 'bg-green-500' : 'bg-yellow-500'
-                                                            }`}
-                                                        />
-                                                    </div>
-                                                    <span
-                                                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ${
-                                                            search.status === 'active'
-                                                                ? 'bg-green-500/10 text-green-400 ring-green-500/20'
-                                                                : 'bg-yellow-500/10 text-yellow-400 ring-yellow-500/20'
-                                                        }`}>
-                                                        {search.status}
-                                                    </span>
+                                                    {isRunning(search.id) ? (
+                                                        <>
+                                                            <div className="relative flex size-1.5">
+                                                                <span className="absolute inline-flex size-full animate-ping rounded-full bg-blue-400 opacity-75"></span>
+                                                                <span className="relative inline-flex size-1.5 rounded-full bg-blue-500" />
+                                                            </div>
+                                                            <span className="flex items-center gap-1 rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-400 ring-1 ring-inset ring-blue-500/20">
+                                                                <Loader2 className="size-2.5 animate-spin" />
+                                                                running
+                                                            </span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <div className="relative flex size-1.5">
+                                                                {search.status === 'active' && (
+                                                                    <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75"></span>
+                                                                )}
+                                                                <span
+                                                                    className={`relative inline-flex size-1.5 rounded-full ${
+                                                                        search.status === 'active' ? 'bg-green-500' : 'bg-yellow-500'
+                                                                    }`}
+                                                                />
+                                                            </div>
+                                                            <span
+                                                                className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ${
+                                                                    search.status === 'active'
+                                                                        ? 'bg-green-500/10 text-green-400 ring-green-500/20'
+                                                                        : 'bg-yellow-500/10 text-yellow-400 ring-yellow-500/20'
+                                                                }`}>
+                                                                {search.status}
+                                                            </span>
+                                                        </>
+                                                    )}
                                                 </div>
                                                 <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-white/30">
                                                     {filters?.jobTitles?.[0] && (
@@ -221,7 +237,7 @@ export default function SearchesPage() {
                                             <div className="text-[10px] text-white/30">Companies</div>
                                         </div>
                                         <div className="rounded-lg bg-white/5 px-3 py-2 text-center">
-                                            <div className="text-lg font-semibold text-white">—</div>
+                                            <div className="text-lg font-semibold text-white">{search.jobsCount || 0}</div>
                                             <div className="text-[10px] text-white/30">Jobs Found</div>
                                         </div>
                                         <div className="rounded-lg bg-white/5 px-3 py-2">
@@ -236,7 +252,7 @@ export default function SearchesPage() {
                                 </div>
 
                                 {/* Footer */}
-                                <div className="relative flex items-center justify-between border-t border-white/5 bg-white/[0.01] px-4 py-2">
+                                <div className="relative flex items-center justify-between border-t border-white/5 bg-white/[0.01] px-4 py-2" onClick={(e) => e.stopPropagation()}>
                                     <div className="flex items-center gap-4 text-xs">
                                         <span className="flex items-center gap-1 text-white/40">
                                             <Clock className="size-3" />
@@ -248,14 +264,14 @@ export default function SearchesPage() {
                                             variant="ghost"
                                             size="sm"
                                             onClick={() => handleRunSearch(search.id)}
-                                            disabled={runningSearchId === search.id}
+                                            disabled={isRunning(search.id)}
                                             className="h-7 px-2 text-xs text-white/40 hover:bg-white/10 hover:text-white disabled:opacity-50">
-                                            {runningSearchId === search.id ? (
+                                            {isRunning(search.id) ? (
                                                 <Loader2 className="mr-1 size-3 animate-spin" />
                                             ) : (
                                                 <RefreshCw className="mr-1 size-3" />
                                             )}
-                                            {runningSearchId === search.id ? 'Searching (may take a few minutes)...' : 'Run'}
+                                            {isRunning(search.id) ? 'Running...' : 'Run'}
                                         </Button>
                                         {search.status === 'active' ? (
                                             <Button
@@ -324,6 +340,12 @@ export default function SearchesPage() {
                 open={isCreateModalOpen}
                 onOpenChange={setIsCreateModalOpen}
                 onSearchCreated={() => fetchSearches()}
+            />
+
+            <SearchDetailDialog
+                searchId={selectedSearchId}
+                onClose={() => setSelectedSearchId(null)}
+                onRunSearch={handleRunSearch}
             />
         </div>
     )

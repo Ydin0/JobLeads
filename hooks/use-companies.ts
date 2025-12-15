@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import type { Company } from '@/lib/db/schema'
+import { onSearchCompleted, onDataRefresh } from '@/lib/events'
 
 export function useCompanies() {
   const [companies, setCompanies] = useState<Company[]>([])
@@ -27,6 +28,20 @@ export function useCompanies() {
     fetchCompanies()
   }, [fetchCompanies])
 
+  // Listen for search completed events and refresh data
+  useEffect(() => {
+    const unsubscribeSearch = onSearchCompleted(() => {
+      fetchCompanies()
+    })
+    const unsubscribeRefresh = onDataRefresh(() => {
+      fetchCompanies()
+    })
+    return () => {
+      unsubscribeSearch()
+      unsubscribeRefresh()
+    }
+  }, [fetchCompanies])
+
   const updateCompany = async (id: string, data: Partial<Company>) => {
     const response = await fetch(`/api/companies/${id}`, {
       method: 'PATCH',
@@ -47,6 +62,21 @@ export function useCompanies() {
     setCompanies(prev => prev.filter(c => c.id !== id))
   }
 
+  const enrichCompany = async (id: string, options?: { findContacts?: boolean; contactTitles?: string[]; contactLimit?: number }) => {
+    const response = await fetch(`/api/companies/${id}/enrich`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options || {}),
+    })
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Failed to enrich company')
+    }
+    const result = await response.json()
+    setCompanies(prev => prev.map(c => c.id === id ? result.company : c))
+    return result
+  }
+
   return {
     companies,
     isLoading,
@@ -54,5 +84,6 @@ export function useCompanies() {
     fetchCompanies,
     updateCompany,
     deleteCompany,
+    enrichCompany,
   }
 }

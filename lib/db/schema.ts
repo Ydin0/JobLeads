@@ -85,6 +85,7 @@ export const searches = pgTable("searches", {
   }>(),
   status: searchStatusEnum("status").default("active").notNull(),
   resultsCount: integer("results_count").default(0),
+  jobsCount: integer("jobs_count").default(0),
   lastRunAt: timestamp("last_run_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -199,6 +200,7 @@ export const searchesRelations = relations(searches, ({ one, many }) => ({
   }),
   companies: many(companies),
   leads: many(leads),
+  jobs: many(jobs),
 }));
 
 export const companiesRelations = relations(companies, ({ one, many }) => ({

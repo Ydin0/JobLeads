@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { dispatchSearchStarted, dispatchSearchCompleted, dispatchSearchFailed } from '@/lib/events'
 
 interface CreateSearchModalProps {
     open: boolean
@@ -162,6 +163,8 @@ export function CreateSearchModal({ open, onOpenChange, onSearchCreated }: Creat
                         locations: formData.jobLocation ? [formData.jobLocation] : [],
                         companyNames: formData.companies,
                         keywords: [],
+                        rows: formData.totalRows,
+                        publishedAt: formData.publishedAt !== 'any' ? formData.publishedAt : undefined,
                     },
                 }),
             })
@@ -185,6 +188,9 @@ export function CreateSearchModal({ open, onOpenChange, onSearchCreated }: Creat
                 description: 'Scraping LinkedIn jobs. This may take 1-2 minutes.',
             })
 
+            // Mark search as running
+            dispatchSearchStarted(newSearch.id)
+
             // Run search in background (don't await)
             fetch(`/api/searches/${newSearch.id}/run`, {
                 method: 'POST',
@@ -193,16 +199,20 @@ export function CreateSearchModal({ open, onOpenChange, onSearchCreated }: Creat
                     const result = await runResponse.json()
                     toast.success('Search completed!', {
                         id: `search-${newSearch.id}`,
-                        description: `Found ${result.jobsFound} jobs from ${result.companiesFound} companies.`,
+                        description: `Found ${result.jobsFound} jobs, ${result.companiesFound} companies${result.leadsCreated ? `, and ${result.leadsCreated} contacts` : ''}.`,
                     })
-                    // Trigger a refresh
-                    onSearchCreated?.(newSearch)
+                    // Dispatch event to refresh all listening components
+                    dispatchSearchCompleted(newSearch.id, {
+                        jobsFound: result.jobsFound,
+                        companiesFound: result.companiesFound,
+                    })
                 } else {
                     const error = await runResponse.json()
                     toast.error('Search failed', {
                         id: `search-${newSearch.id}`,
                         description: error.details || error.error || 'Unknown error',
                     })
+                    dispatchSearchFailed(newSearch.id)
                 }
             }).catch((runError) => {
                 console.error('Error running search:', runError)
@@ -210,6 +220,7 @@ export function CreateSearchModal({ open, onOpenChange, onSearchCreated }: Creat
                     id: `search-${newSearch.id}`,
                     description: 'You can try running it manually from the searches page.',
                 })
+                dispatchSearchFailed(newSearch.id)
             })
         } catch (error) {
             console.error('Error creating search:', error)

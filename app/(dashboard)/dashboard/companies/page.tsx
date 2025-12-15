@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils'
 import { useCompanies } from '@/hooks/use-companies'
 import Link from 'next/link'
 import { CompanyDetailDialog } from '@/components/dashboard/company-detail-dialog'
+import { EnrichOptionsModal, EnrichmentOptions } from '@/components/dashboard/enrich-options-modal'
 
 interface JobMetadata {
     id: string
@@ -36,11 +37,55 @@ interface CompanyMetadata {
 }
 
 export default function CompaniesPage() {
-    const { companies, isLoading } = useCompanies()
+    const { companies, isLoading, enrichCompany, fetchCompanies } = useCompanies()
     const [searchQuery, setSearchQuery] = useState('')
     const [enrichmentFilter, setEnrichmentFilter] = useState<'all' | 'enriched' | 'not_enriched'>('all')
     const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
     const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null)
+    const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set())
+    const [enrichModalOpen, setEnrichModalOpen] = useState(false)
+    const [companyToEnrich, setCompanyToEnrich] = useState<{ id: string; name: string; logo: string } | null>(null)
+
+    const handleEnrichWithOptions = async (options: EnrichmentOptions) => {
+        const idsToEnrich = companyToEnrich ? [companyToEnrich.id] : selectedCompanies
+
+        for (const id of idsToEnrich) {
+            setEnrichingIds(prev => new Set(prev).add(id))
+            try {
+                await enrichCompany(id, {
+                    findContacts: true,
+                    contactTitles: options.includeTitles,
+                    contactLimit: 10,
+                })
+            } catch (error) {
+                console.error('Error enriching company:', error)
+            } finally {
+                setEnrichingIds(prev => {
+                    const next = new Set(prev)
+                    next.delete(id)
+                    return next
+                })
+            }
+        }
+
+        setSelectedCompanies([])
+        setCompanyToEnrich(null)
+        fetchCompanies()
+    }
+
+    const openEnrichModal = (company: { id: string; name: string; logoUrl: string | null }) => {
+        setCompanyToEnrich({
+            id: company.id,
+            name: company.name,
+            logo: company.logoUrl ? '' : company.name.charAt(0),
+        })
+        setEnrichModalOpen(true)
+    }
+
+    const openBulkEnrichModal = () => {
+        setCompanyToEnrich(null)
+        setEnrichModalOpen(true)
+    }
 
     const stats = [
         {
@@ -115,8 +160,14 @@ export default function CompaniesPage() {
                 </div>
                 {selectedCompanies.length > 0 && (
                     <Button
+                        onClick={openBulkEnrichModal}
+                        disabled={enrichingIds.size > 0}
                         className="h-8 bg-gradient-to-r from-purple-500 to-blue-500 text-sm text-white hover:from-purple-600 hover:to-blue-600">
-                        <Sparkles className="mr-1.5 size-3.5" />
+                        {enrichingIds.size > 0 ? (
+                            <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                        ) : (
+                            <Sparkles className="mr-1.5 size-3.5" />
+                        )}
                         Enrich {selectedCompanies.length} {selectedCompanies.length === 1 ? 'Company' : 'Companies'}
                     </Button>
                 )}
@@ -327,9 +378,17 @@ export default function CompaniesPage() {
                                                     {!company.isEnriched ? (
                                                         <Button
                                                             size="sm"
+                                                            onClick={() => openEnrichModal(company)}
+                                                            disabled={enrichingIds.has(company.id)}
                                                             className="h-7 w-[72px] bg-gradient-to-r from-purple-500 to-blue-500 text-[10px] text-white hover:from-purple-600 hover:to-blue-600">
-                                                            <Sparkles className="mr-1 size-2.5" />
-                                                            Enrich
+                                                            {enrichingIds.has(company.id) ? (
+                                                                <Loader2 className="size-3 animate-spin" />
+                                                            ) : (
+                                                                <>
+                                                                    <Sparkles className="mr-1 size-2.5" />
+                                                                    Enrich
+                                                                </>
+                                                            )}
                                                         </Button>
                                                     ) : (
                                                         <Link href="/dashboard/leads">
@@ -380,6 +439,18 @@ export default function CompaniesPage() {
             <CompanyDetailDialog
                 companyId={selectedCompanyId}
                 onClose={() => setSelectedCompanyId(null)}
+            />
+
+            {/* Enrich Options Modal */}
+            <EnrichOptionsModal
+                company={companyToEnrich}
+                companies={companyToEnrich ? undefined : selectedCompanies.map(id => {
+                    const c = companies.find(comp => comp.id === id)
+                    return c ? { id: c.id, name: c.name, logo: c.logoUrl || c.name.charAt(0) } : null
+                }).filter((c): c is { id: string; name: string; logo: string } => c !== null)}
+                open={enrichModalOpen}
+                onOpenChange={setEnrichModalOpen}
+                onEnrich={handleEnrichWithOptions}
             />
         </div>
     )

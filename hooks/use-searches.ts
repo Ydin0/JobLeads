@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import type { Search } from '@/lib/db/schema'
+import { onSearchCompleted, onDataRefresh, dispatchSearchCompleted, dispatchSearchStarted, dispatchSearchFailed } from '@/lib/events'
 
 export function useSearches() {
   const [searches, setSearches] = useState<Search[]>([])
@@ -27,6 +28,20 @@ export function useSearches() {
     fetchSearches()
   }, [fetchSearches])
 
+  // Listen for search completed events and refresh data
+  useEffect(() => {
+    const unsubscribeSearch = onSearchCompleted(() => {
+      fetchSearches()
+    })
+    const unsubscribeRefresh = onDataRefresh(() => {
+      fetchSearches()
+    })
+    return () => {
+      unsubscribeSearch()
+      unsubscribeRefresh()
+    }
+  }, [fetchSearches])
+
   const createSearch = async (data: {
     name: string
     description?: string
@@ -49,6 +64,9 @@ export function useSearches() {
   }
 
   const runSearch = async (id: string) => {
+    // Mark search as started
+    dispatchSearchStarted(id)
+
     // Create abort controller with 5 minute timeout for long-running Apify searches
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000)
@@ -62,14 +80,19 @@ export function useSearches() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
+        dispatchSearchFailed(id)
         throw new Error(errorData.details || errorData.error || 'Failed to run search')
       }
       const result = await response.json()
-      // Refresh searches to get updated count
-      await fetchSearches()
+      // Dispatch event to refresh all listening components
+      dispatchSearchCompleted(id, {
+        jobsFound: result.jobsFound,
+        companiesFound: result.companiesFound,
+      })
       return result
     } catch (err) {
       clearTimeout(timeoutId)
+      dispatchSearchFailed(id)
       if (err instanceof Error && err.name === 'AbortError') {
         throw new Error('Search timed out. Please try again.')
       }

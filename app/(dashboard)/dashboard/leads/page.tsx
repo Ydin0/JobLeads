@@ -17,10 +17,18 @@ import {
     Copy,
     Loader2,
     Building2,
+    Phone,
+    Sparkles,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useLeads } from '@/hooks/use-leads'
 import Link from 'next/link'
+import type { Lead, Company } from '@/lib/db/schema'
+import { EnrichLeadsModal, LeadEnrichmentOptions } from '@/components/dashboard/enrich-leads-modal'
+
+interface LeadWithCompany extends Lead {
+    company?: Company | null
+}
 
 const statusConfig = {
     new: { label: 'New', icon: Clock, color: 'bg-blue-500/10 text-blue-400 ring-blue-500/20' },
@@ -30,12 +38,55 @@ const statusConfig = {
 }
 
 export default function LeadsPage() {
-    const { leads, isLoading, updateLead } = useLeads()
+    const { leads, isLoading, updateLead, bulkEnrichLeads } = useLeads()
     const [searchQuery, setSearchQuery] = useState('')
     const [statusFilter, setStatusFilter] = useState<'all' | 'new' | 'contacted' | 'qualified' | 'rejected'>('all')
     const [selectedLeads, setSelectedLeads] = useState<string[]>([])
     const [currentPage, setCurrentPage] = useState(1)
+    const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set())
+    const [isEnriching, setIsEnriching] = useState(false)
+    const [enrichModalOpen, setEnrichModalOpen] = useState(false)
+    const [enrichModalLead, setEnrichModalLead] = useState<LeadWithCompany | null>(null)
     const leadsPerPage = 10
+
+    // Get selected leads data for modal
+    const selectedLeadsData = (leads as LeadWithCompany[]).filter(l => selectedLeads.includes(l.id))
+
+    const openEnrichModal = (lead?: LeadWithCompany) => {
+        setEnrichModalLead(lead || null)
+        setEnrichModalOpen(true)
+    }
+
+    const handleEnrichWithOptions = async (options: LeadEnrichmentOptions) => {
+        const leadIdsToEnrich = enrichModalLead ? [enrichModalLead.id] : selectedLeads
+
+        if (leadIdsToEnrich.length === 0) return
+
+        setIsEnriching(true)
+        setEnrichingIds(prev => {
+            const next = new Set(prev)
+            leadIdsToEnrich.forEach(id => next.add(id))
+            return next
+        })
+
+        try {
+            await bulkEnrichLeads(leadIdsToEnrich, options.revealPhoneNumber)
+            // Clear selection after successful enrichment
+            if (!enrichModalLead) {
+                setSelectedLeads([])
+            }
+        } catch (error) {
+            console.error('Error enriching leads:', error)
+        } finally {
+            setIsEnriching(false)
+            setEnrichingIds(prev => {
+                const next = new Set(prev)
+                leadIdsToEnrich.forEach(id => next.delete(id))
+                return next
+            })
+            setEnrichModalLead(null)
+        }
+    }
 
     const stats = [
         { label: 'Total Leads', value: leads.length, icon: Users, color: 'from-blue-500 to-cyan-500' },
@@ -44,11 +95,13 @@ export default function LeadsPage() {
         { label: 'Qualified', value: leads.filter(l => l.status === 'qualified').length, icon: UserCheck, color: 'from-green-500 to-emerald-500' },
     ]
 
-    const filteredLeads = leads.filter(lead => {
+    const filteredLeads = (leads as LeadWithCompany[]).filter(lead => {
+        const companyName = lead.company?.name || ''
         const matchesSearch =
             `${lead.firstName} ${lead.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (lead.jobTitle?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
-            (lead.email?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
+            (lead.email?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
+            companyName.toLowerCase().includes(searchQuery.toLowerCase())
         const matchesStatus = statusFilter === 'all' || lead.status === statusFilter
         return matchesSearch && matchesStatus
     })
@@ -85,11 +138,6 @@ export default function LeadsPage() {
         }
     }
 
-    const formatDate = (date: Date | string | null) => {
-        if (!date) return '—'
-        return new Date(date).toLocaleDateString()
-    }
-
     return (
         <div className="space-y-4">
             {/* Header */}
@@ -101,11 +149,24 @@ export default function LeadsPage() {
                     </p>
                 </div>
                 {selectedLeads.length > 0 && (
-                    <Button
-                        className="h-8 bg-white text-sm text-black hover:bg-white/90">
-                        <Download className="mr-1.5 size-3.5" />
-                        Export {selectedLeads.length} leads
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            onClick={() => openEnrichModal()}
+                            disabled={isEnriching}
+                            className="h-8 bg-gradient-to-r from-purple-500 to-blue-500 text-sm text-white hover:from-purple-600 hover:to-blue-600">
+                            {isEnriching ? (
+                                <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                            ) : (
+                                <Sparkles className="mr-1.5 size-3.5" />
+                            )}
+                            Enrich {selectedLeads.length} leads
+                        </Button>
+                        <Button
+                            className="h-8 bg-white text-sm text-black hover:bg-white/90">
+                            <Download className="mr-1.5 size-3.5" />
+                            Export
+                        </Button>
+                    </div>
                 )}
             </div>
 
@@ -198,17 +259,17 @@ export default function LeadsPage() {
                                         </button>
                                     </th>
                                     <th className="px-3 py-2.5 text-left text-xs font-medium text-white/40">Contact</th>
+                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-white/40">Company</th>
                                     <th className="px-3 py-2.5 text-left text-xs font-medium text-white/40">Title</th>
                                     <th className="px-3 py-2.5 text-left text-xs font-medium text-white/40">Email</th>
+                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-white/40">Phone</th>
                                     <th className="px-3 py-2.5 text-left text-xs font-medium text-white/40">Status</th>
-                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-white/40">Found</th>
                                     <th className="px-3 py-2.5 text-right text-xs font-medium text-white/40">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
                                 {paginatedLeads.map((lead) => {
                                     const status = statusConfig[lead.status as keyof typeof statusConfig] || statusConfig.new
-                                    const StatusIcon = status.icon
 
                                     return (
                                         <tr
@@ -247,6 +308,27 @@ export default function LeadsPage() {
                                             </td>
 
                                             <td className="px-3 py-2.5">
+                                                {lead.company ? (
+                                                    <div className="flex items-center gap-2">
+                                                        {lead.company.logoUrl ? (
+                                                            <img
+                                                                src={lead.company.logoUrl}
+                                                                alt={lead.company.name}
+                                                                className="size-5 rounded object-cover"
+                                                            />
+                                                        ) : (
+                                                            <div className="flex size-5 items-center justify-center rounded bg-white/10 text-[10px] font-medium text-white">
+                                                                {lead.company.name.charAt(0)}
+                                                            </div>
+                                                        )}
+                                                        <span className="text-xs text-white/60">{lead.company.name}</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-white/30">—</span>
+                                                )}
+                                            </td>
+
+                                            <td className="px-3 py-2.5">
                                                 <span className="text-xs text-white/60">{lead.jobTitle || '—'}</span>
                                             </td>
 
@@ -266,6 +348,45 @@ export default function LeadsPage() {
                                             </td>
 
                                             <td className="px-3 py-2.5">
+                                                {(() => {
+                                                    const metadata = lead.metadata as Record<string, unknown> | null
+                                                    const phonePending = metadata?.phonePending === true
+                                                    const phoneRevealed = metadata?.phoneRevealed === true
+                                                    const phoneFound = metadata?.phoneFound === true
+
+                                                    if (lead.phone) {
+                                                        return (
+                                                            <div className="flex items-center gap-1">
+                                                                <span className="text-xs text-white/60">{lead.phone}</span>
+                                                                <button
+                                                                    onClick={() => navigator.clipboard.writeText(lead.phone!)}
+                                                                    className="rounded p-0.5 text-white/20 transition-colors hover:bg-white/10 hover:text-white">
+                                                                    <Copy className="size-3" />
+                                                                </button>
+                                                            </div>
+                                                        )
+                                                    }
+
+                                                    if (phonePending) {
+                                                        return (
+                                                            <div className="flex items-center gap-1.5">
+                                                                <Loader2 className="size-3 animate-spin text-purple-400" />
+                                                                <span className="text-xs text-purple-400">Fetching...</span>
+                                                            </div>
+                                                        )
+                                                    }
+
+                                                    if (phoneRevealed && !phoneFound) {
+                                                        return (
+                                                            <span className="text-xs text-white/40">No number</span>
+                                                        )
+                                                    }
+
+                                                    return <span className="text-xs text-white/30">—</span>
+                                                })()}
+                                            </td>
+
+                                            <td className="px-3 py-2.5">
                                                 <select
                                                     value={lead.status}
                                                     onChange={(e) => handleStatusChange(lead.id, e.target.value)}
@@ -278,10 +399,6 @@ export default function LeadsPage() {
                                                     <option value="qualified" className="bg-[#0a0a0f]">Qualified</option>
                                                     <option value="rejected" className="bg-[#0a0a0f]">Rejected</option>
                                                 </select>
-                                            </td>
-
-                                            <td className="px-3 py-2.5">
-                                                <span className="text-xs text-white/40">{formatDate(lead.createdAt)}</span>
                                             </td>
 
                                             <td className="px-3 py-2.5">
@@ -302,6 +419,27 @@ export default function LeadsPage() {
                                                             <Mail className="size-3.5" />
                                                         </a>
                                                     )}
+                                                    {lead.phone && (
+                                                        <a
+                                                            href={`tel:${lead.phone}`}
+                                                            className="rounded p-1 text-white/30 transition-colors hover:bg-white/10 hover:text-white">
+                                                            <Phone className="size-3.5" />
+                                                        </a>
+                                                    )}
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={() => openEnrichModal(lead)}
+                                                        disabled={enrichingIds.has(lead.id)}
+                                                        className="h-6 bg-gradient-to-r from-purple-500 to-blue-500 px-2 text-[10px] text-white hover:from-purple-600 hover:to-blue-600">
+                                                        {enrichingIds.has(lead.id) ? (
+                                                            <Loader2 className="size-3 animate-spin" />
+                                                        ) : (
+                                                            <>
+                                                                <Sparkles className="mr-1 size-2.5" />
+                                                                Enrich
+                                                            </>
+                                                        )}
+                                                    </Button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -366,6 +504,15 @@ export default function LeadsPage() {
                     )}
                 </div>
             )}
+
+            {/* Enrich Leads Modal */}
+            <EnrichLeadsModal
+                lead={enrichModalLead}
+                leads={enrichModalLead ? undefined : selectedLeadsData}
+                open={enrichModalOpen}
+                onOpenChange={setEnrichModalOpen}
+                onEnrich={handleEnrichWithOptions}
+            />
         </div>
     )
 }
