@@ -146,9 +146,35 @@ export function CreateSearchModal({ open, onOpenChange, onSearchCreated }: Creat
         }))
     }
 
-    const handleSubmit = () => {
-        console.log('Creating search:', formData)
-        handleClose()
+    const handleSubmit = async () => {
+        try {
+            setIsSubmitting(true)
+
+            const response = await fetch('/api/searches', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: formData.name || `${formData.jobTitle || 'Jobs'} in ${formData.jobLocation || 'Any Location'}`,
+                    description: `Search for ${formData.jobTitle || 'any'} jobs in ${formData.jobLocation || 'any location'}`,
+                    filters: {
+                        jobTitles: formData.jobTitle ? [formData.jobTitle] : [],
+                        locations: formData.jobLocation ? [formData.jobLocation] : [],
+                        companyNames: formData.companies,
+                        keywords: [],
+                    },
+                }),
+            })
+
+            if (!response.ok) throw new Error('Failed to create search')
+
+            const newSearch = await response.json()
+            onSearchCreated?.(newSearch)
+            handleClose()
+        } catch (error) {
+            console.error('Error creating search:', error)
+        } finally {
+            setIsSubmitting(false)
+        }
     }
 
     if (!open) return null
@@ -605,9 +631,10 @@ export function CreateSearchModal({ open, onOpenChange, onSearchCreated }: Creat
                         <Button
                             size="sm"
                             onClick={handleSubmit}
-                            className="h-7 bg-gradient-to-r from-blue-500 to-cyan-500 px-3 text-xs text-white hover:from-blue-600 hover:to-cyan-600">
+                            disabled={isSubmitting}
+                            className="h-7 bg-gradient-to-r from-blue-500 to-cyan-500 px-3 text-xs text-white hover:from-blue-600 hover:to-cyan-600 disabled:opacity-50">
                             <Sparkles className="mr-1.5 size-3" />
-                            Create Search
+                            {isSubmitting ? 'Creating...' : 'Create Search'}
                         </Button>
                     )}
                 </div>
