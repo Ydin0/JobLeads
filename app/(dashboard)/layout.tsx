@@ -1,6 +1,9 @@
 import { DashboardSidebar } from '@/components/dashboard/sidebar'
 import { DashboardHeader } from '@/components/dashboard/header'
 
+// Prevent static prerendering - these pages require Clerk auth context
+export const dynamic = 'force-dynamic'
+
 export default function DashboardLayout({
     children,
 }: {
