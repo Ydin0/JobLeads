@@ -79,6 +79,8 @@ export const searches = pgTable("searches", {
     locations?: string[];
     industries?: string[];
     companySize?: string[];
+    companyNames?: string[];
+    companyIds?: string[];
     keywords?: string[];
   }>(),
   status: searchStatusEnum("status").default("active").notNull(),
