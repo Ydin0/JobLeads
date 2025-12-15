@@ -49,14 +49,32 @@ export function useSearches() {
   }
 
   const runSearch = async (id: string) => {
-    const response = await fetch(`/api/searches/${id}/run`, {
-      method: 'POST',
-    })
-    if (!response.ok) throw new Error('Failed to run search')
-    const result = await response.json()
-    // Refresh searches to get updated count
-    await fetchSearches()
-    return result
+    // Create abort controller with 5 minute timeout for long-running Apify searches
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000)
+
+    try {
+      const response = await fetch(`/api/searches/${id}/run`, {
+        method: 'POST',
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.details || errorData.error || 'Failed to run search')
+      }
+      const result = await response.json()
+      // Refresh searches to get updated count
+      await fetchSearches()
+      return result
+    } catch (err) {
+      clearTimeout(timeoutId)
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new Error('Search timed out. Please try again.')
+      }
+      throw err
+    }
   }
 
   const updateSearch = async (id: string, data: Partial<Search>) => {

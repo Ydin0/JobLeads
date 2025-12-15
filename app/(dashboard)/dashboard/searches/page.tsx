@@ -29,9 +29,11 @@ export default function SearchesPage() {
     const handleRunSearch = async (id: string) => {
         try {
             setRunningSearchId(id)
-            await runSearch(id)
+            const result = await runSearch(id)
+            alert(`Search completed! Found ${result.jobsFound} jobs from ${result.companiesFound} companies.`)
         } catch (error) {
             console.error('Error running search:', error)
+            alert(error instanceof Error ? error.message : 'Failed to run search. Please try again.')
         } finally {
             setRunningSearchId(null)
         }
@@ -242,7 +244,7 @@ export default function SearchesPage() {
                                             ) : (
                                                 <RefreshCw className="mr-1 size-3" />
                                             )}
-                                            {runningSearchId === search.id ? 'Running...' : 'Run'}
+                                            {runningSearchId === search.id ? 'Searching (may take a few minutes)...' : 'Run'}
                                         </Button>
                                         {search.status === 'active' ? (
                                             <Button

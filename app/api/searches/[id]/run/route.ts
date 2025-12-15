@@ -9,6 +9,9 @@ import {
   LinkedInJobsInput,
 } from "@/lib/apify";
 
+// Extend timeout for Apify actor runs (can take several minutes)
+export const maxDuration = 300; // 5 minutes
+
 type RouteContext = { params: Promise<{ id: string }> };
 
 // POST /api/searches/[id]/run - Execute a search and store results
