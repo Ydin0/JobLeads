@@ -11,7 +11,6 @@ import {
     Calendar,
     Check,
     Sparkles,
-    Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -80,7 +79,6 @@ const steps = [
 export function CreateSearchModal({ open, onOpenChange, onSearchCreated }: CreateSearchModalProps) {
     const [currentStep, setCurrentStep] = useState(1)
     const [isSubmitting, setIsSubmitting] = useState(false)
-    const [isRunning, setIsRunning] = useState(false)
     const [formData, setFormData] = useState({
         name: '',
         jobBoards: ['linkedin'] as string[],
@@ -172,50 +170,47 @@ export function CreateSearchModal({ open, onOpenChange, onSearchCreated }: Creat
 
             const newSearch = await response.json()
             onSearchCreated?.(newSearch)
+            handleClose()
 
             if (!runImmediately) {
                 toast.success('Search created successfully', {
                     description: 'You can run it from the searches page.',
                 })
-                handleClose()
                 return
             }
 
-            // Run immediately
-            setIsRunning(true)
+            // Run in background - close modal immediately and show toast
             toast.loading('Running search...', {
-                id: 'search-running',
+                id: `search-${newSearch.id}`,
                 description: 'Scraping LinkedIn jobs. This may take 1-2 minutes.',
             })
 
-            try {
-                const runResponse = await fetch(`/api/searches/${newSearch.id}/run`, {
-                    method: 'POST',
-                })
-
+            // Run search in background (don't await)
+            fetch(`/api/searches/${newSearch.id}/run`, {
+                method: 'POST',
+            }).then(async (runResponse) => {
                 if (runResponse.ok) {
                     const result = await runResponse.json()
                     toast.success('Search completed!', {
-                        id: 'search-running',
+                        id: `search-${newSearch.id}`,
                         description: `Found ${result.jobsFound} jobs from ${result.companiesFound} companies.`,
                     })
+                    // Trigger a refresh
+                    onSearchCreated?.(newSearch)
                 } else {
                     const error = await runResponse.json()
                     toast.error('Search failed', {
-                        id: 'search-running',
+                        id: `search-${newSearch.id}`,
                         description: error.details || error.error || 'Unknown error',
                     })
                 }
-            } catch (runError) {
+            }).catch((runError) => {
                 console.error('Error running search:', runError)
                 toast.error('Search failed to run', {
-                    id: 'search-running',
+                    id: `search-${newSearch.id}`,
                     description: 'You can try running it manually from the searches page.',
                 })
-            } finally {
-                setIsRunning(false)
-                handleClose()
-            }
+            })
         } catch (error) {
             console.error('Error creating search:', error)
             toast.error('Failed to create search', {
@@ -233,33 +228,11 @@ export function CreateSearchModal({ open, onOpenChange, onSearchCreated }: Creat
             {/* Backdrop */}
             <div
                 className="absolute inset-0 bg-black/70 backdrop-blur-md"
-                onClick={!isRunning ? handleClose : undefined}
+                onClick={handleClose}
             />
 
             {/* Modal */}
             <div className="relative flex h-[580px] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0f]/95 shadow-2xl shadow-purple-500/5 backdrop-blur-xl">
-                {/* Running Overlay */}
-                {isRunning && (
-                    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#0a0a0f]/95 backdrop-blur-sm">
-                        <div className="relative">
-                            <div className="absolute inset-0 animate-ping rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 opacity-20" />
-                            <div className="relative flex size-16 items-center justify-center rounded-full bg-gradient-to-r from-blue-500 to-cyan-500">
-                                <Loader2 className="size-8 animate-spin text-white" />
-                            </div>
-                        </div>
-                        <h3 className="mt-6 text-lg font-semibold text-white">Running Search</h3>
-                        <p className="mt-2 text-center text-sm text-white/40">
-                            Scraping LinkedIn jobs for "{formData.jobTitle || 'all positions'}"
-                            {formData.jobLocation && ` in ${formData.jobLocation}`}
-                        </p>
-                        <p className="mt-1 text-xs text-white/30">This may take 1-2 minutes...</p>
-                        <div className="mt-6 flex items-center gap-2">
-                            <div className="size-2 animate-bounce rounded-full bg-blue-500" style={{ animationDelay: '0ms' }} />
-                            <div className="size-2 animate-bounce rounded-full bg-cyan-500" style={{ animationDelay: '150ms' }} />
-                            <div className="size-2 animate-bounce rounded-full bg-blue-500" style={{ animationDelay: '300ms' }} />
-                        </div>
-                    </div>
-                )}
                 {/* Gradient accents */}
                 <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-purple-500/50 to-transparent" />
                 <div className="absolute -left-20 -top-20 size-40 rounded-full bg-blue-500/10 blur-3xl" />

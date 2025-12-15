@@ -111,6 +111,34 @@ export const companies = pgTable("companies", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+// Jobs table - raw job postings from searches
+export const jobs = pgTable("jobs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  orgId: varchar("org_id", { length: 255 }).notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  companyId: uuid("company_id").references(() => companies.id, { onDelete: "cascade" }),
+  searchId: uuid("search_id").references(() => searches.id, { onDelete: "set null" }),
+  externalId: varchar("external_id", { length: 255 }), // LinkedIn job ID
+  title: varchar("title", { length: 500 }).notNull(),
+  jobUrl: text("job_url"),
+  location: varchar("location", { length: 255 }),
+  salary: varchar("salary", { length: 255 }),
+  contractType: varchar("contract_type", { length: 100 }),
+  experienceLevel: varchar("experience_level", { length: 100 }),
+  workType: varchar("work_type", { length: 100 }),
+  sector: varchar("sector", { length: 255 }),
+  description: text("description"),
+  postedTime: varchar("posted_time", { length: 100 }),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  applicationsCount: varchar("applications_count", { length: 100 }),
+  applyUrl: text("apply_url"),
+  applyType: varchar("apply_type", { length: 50 }),
+  posterName: varchar("poster_name", { length: 255 }),
+  posterUrl: text("poster_url"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 // Leads table - contact leads from companies
 export const leads = pgTable("leads", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -182,7 +210,23 @@ export const companiesRelations = relations(companies, ({ one, many }) => ({
     fields: [companies.searchId],
     references: [searches.id],
   }),
+  jobs: many(jobs),
   leads: many(leads),
+}));
+
+export const jobsRelations = relations(jobs, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [jobs.orgId],
+    references: [organizations.id],
+  }),
+  company: one(companies, {
+    fields: [jobs.companyId],
+    references: [companies.id],
+  }),
+  search: one(searches, {
+    fields: [jobs.searchId],
+    references: [searches.id],
+  }),
 }));
 
 export const leadsRelations = relations(leads, ({ one }) => ({
@@ -211,5 +255,7 @@ export type Search = typeof searches.$inferSelect;
 export type NewSearch = typeof searches.$inferInsert;
 export type Company = typeof companies.$inferSelect;
 export type NewCompany = typeof companies.$inferInsert;
+export type Job = typeof jobs.$inferSelect;
+export type NewJob = typeof jobs.$inferInsert;
 export type Lead = typeof leads.$inferSelect;
 export type NewLead = typeof leads.$inferInsert;

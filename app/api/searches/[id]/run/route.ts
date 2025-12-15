@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { searches, companies } from "@/lib/db/schema";
+import { searches, companies, jobs } from "@/lib/db/schema";
 import { requireOrgAuth } from "@/lib/auth";
 import { eq, and } from "drizzle-orm";
 import {
@@ -59,8 +59,10 @@ export async function POST(req: Request, { params }: RouteContext) {
     // Extract unique companies from results
     const extractedCompanies = extractCompaniesFromJobs(jobResults);
 
-    // Store companies in database
+    // Store companies in database and track their IDs
+    const companyIdMap = new Map<string, string>(); // companyName -> companyId
     const insertedCompanies = [];
+
     for (const company of extractedCompanies) {
       const [inserted] = await db
         .insert(companies)
@@ -73,16 +75,6 @@ export async function POST(req: Request, { params }: RouteContext) {
           metadata: {
             linkedinId: company.linkedinId,
             jobCount: company.jobCount,
-            jobs: company.jobs.map((job) => ({
-              id: job.id,
-              title: job.title,
-              url: job.jobUrl,
-              location: job.location,
-              publishedAt: job.publishedAt,
-              contractType: job.contractType,
-              salary: job.salary,
-              experienceLevel: job.experienceLevel,
-            })),
           },
         })
         .onConflictDoNothing()
@@ -90,14 +82,54 @@ export async function POST(req: Request, { params }: RouteContext) {
 
       if (inserted) {
         insertedCompanies.push(inserted);
+        companyIdMap.set(company.name.toLowerCase(), inserted.id);
       }
     }
+    console.log("[Search Run] Stored", insertedCompanies.length, "companies");
+
+    // Store jobs in database
+    let jobsStored = 0;
+    for (const job of jobResults) {
+      if (!job.companyName) continue;
+
+      const companyId = companyIdMap.get(job.companyName.toLowerCase());
+      if (!companyId) continue;
+
+      try {
+        await db.insert(jobs).values({
+          orgId,
+          companyId,
+          searchId: id,
+          externalId: job.id?.toString(),
+          title: job.title,
+          jobUrl: job.jobUrl,
+          location: job.location,
+          salary: job.salary,
+          contractType: job.contractType,
+          experienceLevel: job.experienceLevel,
+          workType: job.workType,
+          sector: job.sector,
+          description: job.description,
+          postedTime: job.postedTime,
+          publishedAt: job.publishedAt ? new Date(job.publishedAt) : null,
+          applicationsCount: job.applicationsCount,
+          applyUrl: job.applyUrl,
+          applyType: job.applyType,
+          posterName: job.posterFullName,
+          posterUrl: job.posterProfileUrl,
+        }).onConflictDoNothing();
+        jobsStored++;
+      } catch (err) {
+        console.error("[Search Run] Error storing job:", err);
+      }
+    }
+    console.log("[Search Run] Stored", jobsStored, "jobs");
 
     // Update search with results count and last run time
     await db
       .update(searches)
       .set({
-        resultsCount: extractedCompanies.length,
+        resultsCount: insertedCompanies.length,
         lastRunAt: new Date(),
         updatedAt: new Date(),
       })
@@ -108,6 +140,7 @@ export async function POST(req: Request, { params }: RouteContext) {
       jobsFound: jobResults.length,
       companiesFound: extractedCompanies.length,
       companiesStored: insertedCompanies.length,
+      jobsStored,
       companies: insertedCompanies,
     });
   } catch (error) {

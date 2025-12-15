@@ -19,6 +19,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useCompanies } from '@/hooks/use-companies'
 import Link from 'next/link'
+import { CompanyDetailDialog } from '@/components/dashboard/company-detail-dialog'
 
 interface JobMetadata {
     id: string
@@ -39,6 +40,7 @@ export default function CompaniesPage() {
     const [searchQuery, setSearchQuery] = useState('')
     const [enrichmentFilter, setEnrichmentFilter] = useState<'all' | 'enriched' | 'not_enriched'>('all')
     const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
+    const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null)
 
     const stats = [
         {
@@ -228,13 +230,14 @@ export default function CompaniesPage() {
                                     return (
                                         <tr
                                             key={company.id}
+                                            onClick={() => setSelectedCompanyId(company.id)}
                                             className={cn(
-                                                'group transition-colors hover:bg-white/[0.03]',
+                                                'group cursor-pointer transition-colors hover:bg-white/[0.03]',
                                                 selectedCompanies.includes(company.id) && 'bg-purple-500/5'
                                             )}>
                                             <td className="px-3 py-2.5">
                                                 <button
-                                                    onClick={() => toggleSelectCompany(company.id)}
+                                                    onClick={(e) => { e.stopPropagation(); toggleSelectCompany(company.id); }}
                                                     className={cn(
                                                         'flex size-4 items-center justify-center rounded border transition-all',
                                                         selectedCompanies.includes(company.id)
@@ -301,7 +304,7 @@ export default function CompaniesPage() {
                                                 )}
                                             </td>
 
-                                            <td className="px-3 py-2.5">
+                                            <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                                                 <div className="flex items-center justify-end gap-1">
                                                     {company.linkedinUrl && (
                                                         <a
@@ -372,6 +375,12 @@ export default function CompaniesPage() {
                     )}
                 </div>
             )}
+
+            {/* Company Detail Dialog */}
+            <CompanyDetailDialog
+                companyId={selectedCompanyId}
+                onClose={() => setSelectedCompanyId(null)}
+            />
         </div>
     )
 }
