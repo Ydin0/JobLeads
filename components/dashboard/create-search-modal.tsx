@@ -146,7 +146,7 @@ export function CreateSearchModal({ open, onOpenChange, onSearchCreated }: Creat
         }))
     }
 
-    const handleSubmit = async () => {
+    const handleSubmit = async (runImmediately: boolean = false) => {
         try {
             setIsSubmitting(true)
 
@@ -170,8 +170,29 @@ export function CreateSearchModal({ open, onOpenChange, onSearchCreated }: Creat
             const newSearch = await response.json()
             onSearchCreated?.(newSearch)
             handleClose()
+
+            // Run immediately if requested
+            if (runImmediately) {
+                alert('Search created! Now running... This may take a few minutes. You can navigate away and check back later.')
+                try {
+                    const runResponse = await fetch(`/api/searches/${newSearch.id}/run`, {
+                        method: 'POST',
+                    })
+                    if (runResponse.ok) {
+                        const result = await runResponse.json()
+                        alert(`Search completed! Found ${result.jobsFound} jobs from ${result.companiesFound} companies.`)
+                    } else {
+                        const error = await runResponse.json()
+                        alert(`Search failed: ${error.details || error.error || 'Unknown error'}`)
+                    }
+                } catch (runError) {
+                    console.error('Error running search:', runError)
+                    alert('Search was created but failed to run. You can try running it manually from the searches page.')
+                }
+            }
         } catch (error) {
             console.error('Error creating search:', error)
+            alert('Failed to create search. Please try again.')
         } finally {
             setIsSubmitting(false)
         }
@@ -628,14 +649,24 @@ export function CreateSearchModal({ open, onOpenChange, onSearchCreated }: Creat
                             <ChevronRight className="ml-1 size-3" />
                         </Button>
                     ) : (
-                        <Button
-                            size="sm"
-                            onClick={handleSubmit}
-                            disabled={isSubmitting}
-                            className="h-7 bg-gradient-to-r from-blue-500 to-cyan-500 px-3 text-xs text-white hover:from-blue-600 hover:to-cyan-600 disabled:opacity-50">
-                            <Sparkles className="mr-1.5 size-3" />
-                            {isSubmitting ? 'Creating...' : 'Create Search'}
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleSubmit(false)}
+                                disabled={isSubmitting}
+                                className="h-7 px-3 text-xs text-white/60 hover:bg-white/10 hover:text-white disabled:opacity-50">
+                                {isSubmitting ? 'Creating...' : 'Create Only'}
+                            </Button>
+                            <Button
+                                size="sm"
+                                onClick={() => handleSubmit(true)}
+                                disabled={isSubmitting}
+                                className="h-7 bg-gradient-to-r from-blue-500 to-cyan-500 px-3 text-xs text-white hover:from-blue-600 hover:to-cyan-600 disabled:opacity-50">
+                                <Sparkles className="mr-1.5 size-3" />
+                                {isSubmitting ? 'Creating...' : 'Create & Run'}
+                            </Button>
+                        </div>
                     )}
                 </div>
             </div>
