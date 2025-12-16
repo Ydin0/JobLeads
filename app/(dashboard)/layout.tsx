@@ -10,16 +10,16 @@ export default function DashboardLayout({
     children: React.ReactNode
 }) {
     return (
-        <div className="relative flex min-h-screen bg-[#050508]">
+        <div className="relative flex min-h-screen bg-background">
             {/* Background effects */}
             <div className="pointer-events-none fixed inset-0 overflow-hidden">
                 {/* Grid pattern */}
-                <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px]" />
+                <div className="absolute inset-0 bg-[linear-gradient(var(--theme-accent)_1px,transparent_1px),linear-gradient(90deg,var(--theme-accent)_1px,transparent_1px)] bg-[size:64px_64px] opacity-[0.02] dark:opacity-[0.03]" />
 
-                {/* Gradient orbs */}
-                <div className="absolute -left-32 top-0 size-96 rounded-full bg-purple-500/10 blur-[128px]" />
-                <div className="absolute -right-32 top-1/3 size-96 rounded-full bg-blue-500/10 blur-[128px]" />
-                <div className="absolute bottom-0 left-1/3 size-96 rounded-full bg-cyan-500/5 blur-[128px]" />
+                {/* Gradient orbs - use CSS variables for theme-aware colors */}
+                <div className="absolute -left-32 top-0 size-96 rounded-full bg-[var(--theme-accent-gradient-from)] opacity-[0.08] blur-[128px] dark:opacity-[0.1]" />
+                <div className="absolute -right-32 top-1/3 size-96 rounded-full bg-[var(--theme-accent-gradient-to)] opacity-[0.08] blur-[128px] dark:opacity-[0.1]" />
+                <div className="absolute bottom-0 left-1/3 size-96 rounded-full bg-[var(--theme-accent)] opacity-[0.04] blur-[128px] dark:opacity-[0.05]" />
             </div>
 
             <DashboardSidebar />

@@ -8,7 +8,7 @@
   --muted: oklch(0.97 0 0);
   --border: oklch(0.922 0 0);
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
+  --background: oklch(0.98 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
@@ -37,6 +37,15 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* Light mode accent - Fire Orange */
+  --theme-accent: #f97316;
+  --theme-accent-light: #fb923c;
+  --theme-accent-dark: #ea580c;
+  --theme-accent-foreground: #ffffff;
+  --theme-accent-muted: rgba(249, 115, 22, 0.1);
+  --theme-accent-gradient-from: #f97316;
+  --theme-accent-gradient-to: #ef4444;
 }
 
 @theme inline {
@@ -119,6 +128,15 @@ body {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  /* Dark mode accent - Purple */
+  --theme-accent: #a855f7;
+  --theme-accent-light: #c084fc;
+  --theme-accent-dark: #9333ea;
+  --theme-accent-foreground: #ffffff;
+  --theme-accent-muted: rgba(168, 85, 247, 0.2);
+  --theme-accent-gradient-from: #a855f7;
+  --theme-accent-gradient-to: #3b82f6;
 }
 
 @layer base {

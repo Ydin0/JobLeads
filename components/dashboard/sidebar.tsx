@@ -17,6 +17,7 @@ import {
     Sparkles,
 } from 'lucide-react'
 import { PricingModal } from './pricing-modal'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -41,24 +42,24 @@ export function DashboardSidebar() {
             onOpenChange={setIsPricingModalOpen}
             currentPlan="free"
         />
-        <aside className="fixed inset-y-0 left-0 z-50 hidden w-64 flex-col border-r border-white/5 bg-white/[0.02] backdrop-blur-xl lg:flex">
+        <aside className="fixed inset-y-0 left-0 z-50 hidden w-64 flex-col border-r border-border bg-card/50 backdrop-blur-xl lg:flex">
             {/* Subtle gradient overlay */}
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.05] to-transparent" />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-foreground/[0.02] to-transparent" />
 
-            <div className="relative flex h-14 items-center border-b border-white/5 px-6">
+            <div className="relative flex h-14 items-center border-b border-border px-6">
                 <Link href="/dashboard">
                     <Image
                         src="/Group.svg"
                         alt="RecLead"
                         width={100}
                         height={24}
-                        className="h-6 w-auto"
+                        className="h-6 w-auto dark:invert-0 invert"
                     />
                 </Link>
             </div>
 
             {/* Organization Switcher */}
-            <div className="relative border-b border-white/5 px-3 py-3">
+            <div className="relative border-b border-border px-3 py-3">
                 <OrganizationSwitcher
                     hidePersonal
                     afterCreateOrganizationUrl="/dashboard"
@@ -68,10 +69,10 @@ export function DashboardSidebar() {
                         elements: {
                             rootBox: "w-full",
                             organizationSwitcherTrigger:
-                                "w-full justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white hover:bg-white/10",
-                            organizationPreviewMainIdentifier: "text-white text-sm font-medium",
-                            organizationPreviewSecondaryIdentifier: "text-white/50",
-                            organizationSwitcherTriggerIcon: "text-white/50",
+                                "w-full justify-between rounded-lg border border-border bg-background/50 px-3 py-2 hover:bg-background/80",
+                            organizationPreviewMainIdentifier: "text-sm font-medium",
+                            organizationPreviewSecondaryIdentifier: "text-muted-foreground",
+                            organizationSwitcherTriggerIcon: "text-muted-foreground",
                         },
                     }}
                 />
@@ -88,15 +89,15 @@ export function DashboardSidebar() {
                                     className={cn(
                                         'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
                                         isActive
-                                            ? 'text-white'
-                                            : 'text-white/50 hover:text-white/80'
+                                            ? 'text-foreground'
+                                            : 'text-muted-foreground hover:text-foreground/80'
                                     )}>
                                     {isActive && (
-                                        <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-white/10 to-white/5 ring-1 ring-inset ring-white/10" />
+                                        <div className="absolute inset-0 rounded-lg bg-[var(--theme-accent-muted)] ring-1 ring-inset ring-[var(--theme-accent)]/20" />
                                     )}
                                     <item.icon className={cn(
                                         "relative size-4 transition-colors",
-                                        isActive ? "text-white" : "text-white/40 group-hover:text-white/60"
+                                        isActive ? "text-[var(--theme-accent)]" : "text-muted-foreground group-hover:text-foreground/60"
                                     )} />
                                     <span className="relative">{item.name}</span>
                                 </Link>
@@ -105,7 +106,7 @@ export function DashboardSidebar() {
                     })}
                 </ul>
 
-                <div className="my-4 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+                <div className="my-4 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
 
                 <ul className="space-y-1">
                     {secondaryNavigation.map((item) => {
@@ -117,15 +118,15 @@ export function DashboardSidebar() {
                                     className={cn(
                                         'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
                                         isActive
-                                            ? 'text-white'
-                                            : 'text-white/50 hover:text-white/80'
+                                            ? 'text-foreground'
+                                            : 'text-muted-foreground hover:text-foreground/80'
                                     )}>
                                     {isActive && (
-                                        <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-white/10 to-white/5 ring-1 ring-inset ring-white/10" />
+                                        <div className="absolute inset-0 rounded-lg bg-[var(--theme-accent-muted)] ring-1 ring-inset ring-[var(--theme-accent)]/20" />
                                     )}
                                     <item.icon className={cn(
                                         "relative size-4 transition-colors",
-                                        isActive ? "text-white" : "text-white/40 group-hover:text-white/60"
+                                        isActive ? "text-[var(--theme-accent)]" : "text-muted-foreground group-hover:text-foreground/60"
                                     )} />
                                     <span className="relative">{item.name}</span>
                                 </Link>
@@ -136,29 +137,31 @@ export function DashboardSidebar() {
 
                 <div className="mt-auto space-y-3">
                     {/* Upgrade Card */}
-                    <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-white/[0.08] to-white/[0.02] p-4 ring-1 ring-inset ring-white/10">
-                        <div className="absolute -right-6 -top-6 size-24 rounded-full bg-purple-500/20 blur-2xl" />
+                    <div className="relative overflow-hidden rounded-xl bg-[var(--theme-accent-muted)] p-4 ring-1 ring-inset ring-[var(--theme-accent)]/20">
+                        <div className="absolute -right-6 -top-6 size-24 rounded-full bg-[var(--theme-accent)]/20 blur-2xl" />
                         <div className="relative">
                             <div className="mb-2 flex items-center gap-2">
-                                <Sparkles className="size-4 text-purple-400" />
+                                <Sparkles className="size-4 text-[var(--theme-accent)]" />
                                 <span className="text-sm font-medium">Free Plan</span>
                             </div>
-                            <div className="mb-3 text-xs text-white/50">
+                            <div className="mb-3 text-xs text-muted-foreground">
                                 12 / 30 credits used
                             </div>
-                            <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                                <div className="h-full w-[40%] rounded-full bg-gradient-to-r from-purple-500 to-blue-500" />
+                            <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
+                                <div className="h-full w-[40%] rounded-full bg-gradient-to-r from-[var(--theme-accent-gradient-from)] to-[var(--theme-accent-gradient-to)]" />
                             </div>
                             <button
                                 onClick={() => setIsPricingModalOpen(true)}
-                                className="mt-3 block w-full text-center text-xs font-medium text-purple-400 transition-colors hover:text-purple-300">
+                                className="mt-3 block w-full text-center text-xs font-medium text-[var(--theme-accent)] transition-colors hover:text-[var(--theme-accent-light)]">
                                 Upgrade Plan →
                             </button>
                         </div>
                     </div>
 
+                    <ThemeToggle />
+
                     <SignOutButton>
-                        <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-white/50 transition-colors hover:bg-white/5 hover:text-white/80">
+                        <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground/80">
                             <LogOut className="size-4" />
                             Sign Out
                         </button>
