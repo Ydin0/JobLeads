@@ -497,6 +497,7 @@ export async function bulkEnrichPeople(params: {
   }
 
   console.log("[Apollo] Bulk enriching", apolloIds.length, "people, reveal_phone:", revealPhoneNumber);
+  console.log("[Apollo] Full request body:", JSON.stringify(requestBody, null, 2));
 
   try {
     const response = await fetch(`${APOLLO_BASE_URL}/people/bulk_match`, {
@@ -509,14 +510,19 @@ export async function bulkEnrichPeople(params: {
       body: JSON.stringify(requestBody),
     });
 
+    console.log("[Apollo] Response status:", response.status);
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error("[Apollo] API error:", response.status, errorText);
       throw new Error(`Apollo API error: ${response.status} - ${errorText}`);
     }
 
-    const data = await response.json();
-    console.log("[Apollo] Bulk match response:", data);
+    const responseText = await response.text();
+    console.log("[Apollo] Bulk match raw response:", responseText);
+
+    const data = JSON.parse(responseText);
+    console.log("[Apollo] Bulk match parsed response:", JSON.stringify(data, null, 2));
 
     // Response contains matches array with full person data
     interface BulkMatchPerson {

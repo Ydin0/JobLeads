@@ -6,9 +6,15 @@ import { eq, sql } from "drizzle-orm";
 // POST /api/webhooks/apollo/phones - Receive phone numbers from Apollo
 // Apollo sends phone data asynchronously after bulk_match with reveal_phone_number=true
 export async function POST(req: Request) {
+  console.log("[Apollo Webhook] ========== WEBHOOK CALLED ==========");
+  console.log("[Apollo Webhook] Headers:", Object.fromEntries(req.headers.entries()));
+
   try {
-    const data = await req.json();
-    console.log("[Apollo Webhook] Received phone data:", JSON.stringify(data, null, 2));
+    const rawBody = await req.text();
+    console.log("[Apollo Webhook] Raw body:", rawBody);
+
+    const data = JSON.parse(rawBody);
+    console.log("[Apollo Webhook] Parsed data:", JSON.stringify(data, null, 2));
 
     // Apollo sends phone data in various formats, handle the response
     // The response typically contains the person ID and phone numbers
