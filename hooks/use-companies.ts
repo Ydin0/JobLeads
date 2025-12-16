@@ -88,7 +88,7 @@ export function useCompanies(initialPage = 1, initialLimit = 20) {
     setCompanies(prev => prev.filter(c => c.id !== id))
   }
 
-  const enrichCompany = async (id: string, options?: { findContacts?: boolean; seniorities?: string[]; departments?: string[] }) => {
+  const enrichCompany = async (id: string, options?: { findContacts?: boolean; seniorities?: string[] }) => {
     const response = await fetch(`/api/companies/${id}/enrich`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

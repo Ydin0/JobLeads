@@ -340,7 +340,6 @@ export async function searchPeopleAtCompany(params: {
   organizationDomain?: string;
   titles?: string[];
   seniorities?: string[];
-  departments?: string[];
   limit?: number; // Deprecated - we now fetch all
   maxPages?: number;
 }): Promise<EnrichedPerson[]> {
@@ -348,7 +347,7 @@ export async function searchPeopleAtCompany(params: {
     throw new Error("APOLLO_API_KEY is not configured");
   }
 
-  const { organizationName, organizationDomain, titles, seniorities, departments, maxPages = 10 } = params;
+  const { organizationName, organizationDomain, titles, seniorities, maxPages = 10 } = params;
   const perPage = 100; // Max allowed by Apollo API
 
   const baseRequestBody: Record<string, unknown> = {};
@@ -365,9 +364,6 @@ export async function searchPeopleAtCompany(params: {
   }
   if (seniorities && seniorities.length > 0) {
     baseRequestBody.person_seniorities = seniorities;
-  }
-  if (departments && departments.length > 0) {
-    baseRequestBody.person_departments = departments;
   }
 
   // Note: api_search returns obfuscated data - last_name_obfuscated instead of last_name

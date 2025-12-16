@@ -12,7 +12,6 @@ import {
     ChevronDown,
     Check,
     Filter,
-    Briefcase,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -24,7 +23,6 @@ interface Company {
 
 export interface EnrichOptions {
     seniorities?: string[]
-    departments?: string[]
 }
 
 interface EnrichOptionsModalProps {
@@ -48,27 +46,9 @@ const seniorityLevels = [
     { id: 'entry', label: 'Entry' },
 ]
 
-const departments = [
-    { id: 'c_suite', label: 'C-Suite' },
-    { id: 'product', label: 'Product' },
-    { id: 'engineering', label: 'Engineering & Technical' },
-    { id: 'design', label: 'Design' },
-    { id: 'education', label: 'Education' },
-    { id: 'finance', label: 'Finance' },
-    { id: 'human_resources', label: 'Human Resources' },
-    { id: 'information_technology', label: 'Information Technology' },
-    { id: 'legal', label: 'Legal' },
-    { id: 'marketing', label: 'Marketing' },
-    { id: 'medical_health', label: 'Medical & Health' },
-    { id: 'operations', label: 'Operations' },
-    { id: 'sales', label: 'Sales' },
-    { id: 'consulting', label: 'Consulting' },
-]
-
 export function EnrichOptionsModal({ company, companies, open, onOpenChange, onEnrich }: EnrichOptionsModalProps) {
     const [showFilters, setShowFilters] = useState(false)
     const [selectedSeniorities, setSelectedSeniorities] = useState<string[]>([])
-    const [selectedDepartments, setSelectedDepartments] = useState<string[]>([])
 
     const isBulk = companies && companies.length > 0
     const companyCount = isBulk ? companies.length : 1
@@ -83,31 +63,17 @@ export function EnrichOptionsModal({ company, companies, open, onOpenChange, onE
         )
     }
 
-    const toggleDepartment = (id: string) => {
-        setSelectedDepartments(prev =>
-            prev.includes(id)
-                ? prev.filter(d => d !== id)
-                : [...prev, id]
-        )
-    }
-
     const handleEnrich = () => {
         const options: EnrichOptions = {}
         if (selectedSeniorities.length > 0) {
             options.seniorities = selectedSeniorities
-        }
-        if (selectedDepartments.length > 0) {
-            options.departments = selectedDepartments
         }
         onEnrich(Object.keys(options).length > 0 ? options : undefined)
         onOpenChange(false)
         // Reset state for next open
         setShowFilters(false)
         setSelectedSeniorities([])
-        setSelectedDepartments([])
     }
-
-    const totalFilters = selectedSeniorities.length + selectedDepartments.length
 
     // Credit calculation: 1 credit per company for enrichment
     const estimatedCredits = companyCount
@@ -193,11 +159,11 @@ export function EnrichOptionsModal({ company, companies, open, onOpenChange, onE
                                 </div>
                                 <div>
                                     <div className="text-xs font-medium text-black dark:text-white">
-                                        {totalFilters > 0 ? 'Filtered Employees' : 'All Employees'}
+                                        {selectedSeniorities.length > 0 ? 'Filtered Employees' : 'All Employees'}
                                     </div>
                                     <div className="text-[10px] text-black/40 dark:text-white/40">
-                                        {totalFilters > 0
-                                            ? `${totalFilters} filter${totalFilters > 1 ? 's' : ''} applied`
+                                        {selectedSeniorities.length > 0
+                                            ? `${selectedSeniorities.length} seniority level${selectedSeniorities.length > 1 ? 's' : ''} selected`
                                             : 'Names, titles, emails & LinkedIn profiles'
                                         }
                                     </div>
@@ -223,10 +189,10 @@ export function EnrichOptionsModal({ company, companies, open, onOpenChange, onE
                         <div className="flex items-center gap-2">
                             <Filter className="size-3.5 text-black/40 dark:text-white/40" />
                             <span className="text-xs font-medium text-black/60 dark:text-white/60">
-                                Filter employees
-                                {totalFilters > 0 && (
+                                Filter by seniority
+                                {selectedSeniorities.length > 0 && (
                                     <span className="ml-1.5 rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[10px] text-purple-600 dark:text-purple-400">
-                                        {totalFilters}
+                                        {selectedSeniorities.length}
                                     </span>
                                 )}
                             </span>
@@ -237,98 +203,47 @@ export function EnrichOptionsModal({ company, companies, open, onOpenChange, onE
                         )} />
                     </button>
 
-                    {/* Filters */}
+                    {/* Seniority Filters */}
                     {showFilters && (
-                        <div className="space-y-3">
-                            {/* Seniority Filters */}
-                            <div className="rounded-lg border border-black/5 bg-black/[0.02] p-3 dark:border-white/5 dark:bg-white/[0.02]">
-                                <div className="mb-2 flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Users className="size-3.5 text-black/40 dark:text-white/40" />
-                                        <span className="text-xs font-medium text-black/70 dark:text-white/70">Seniority Level</span>
-                                    </div>
-                                    {selectedSeniorities.length > 0 && (
-                                        <button
-                                            onClick={() => setSelectedSeniorities([])}
-                                            className="text-[10px] text-purple-600 hover:text-purple-500 dark:text-purple-400 dark:hover:text-purple-300"
-                                        >
-                                            Clear
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="grid grid-cols-2 gap-1.5">
-                                    {seniorityLevels.map((level) => (
-                                        <button
-                                            key={level.id}
-                                            onClick={() => toggleSeniority(level.id)}
-                                            className={cn(
-                                                'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-all',
-                                                selectedSeniorities.includes(level.id)
-                                                    ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300'
-                                                    : 'text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/5'
-                                            )}>
-                                            <div className={cn(
-                                                'flex size-3.5 items-center justify-center rounded border transition-all',
-                                                selectedSeniorities.includes(level.id)
-                                                    ? 'border-purple-500 bg-purple-500'
-                                                    : 'border-black/20 dark:border-white/20'
-                                            )}>
-                                                {selectedSeniorities.includes(level.id) && (
-                                                    <Check className="size-2 text-white" />
-                                                )}
-                                            </div>
-                                            <span className="text-xs">{level.label}</span>
-                                        </button>
-                                    ))}
-                                </div>
+                        <div className="rounded-lg border border-black/5 bg-black/[0.02] p-3 dark:border-white/5 dark:bg-white/[0.02]">
+                            <div className="mb-2 flex items-center justify-between">
+                                <span className="text-[10px] text-black/40 dark:text-white/40">
+                                    Leave empty to fetch all employees
+                                </span>
+                                {selectedSeniorities.length > 0 && (
+                                    <button
+                                        onClick={() => setSelectedSeniorities([])}
+                                        className="text-[10px] text-purple-600 hover:text-purple-500 dark:text-purple-400 dark:hover:text-purple-300"
+                                    >
+                                        Clear all
+                                    </button>
+                                )}
                             </div>
-
-                            {/* Department Filters */}
-                            <div className="rounded-lg border border-black/5 bg-black/[0.02] p-3 dark:border-white/5 dark:bg-white/[0.02]">
-                                <div className="mb-2 flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Briefcase className="size-3.5 text-black/40 dark:text-white/40" />
-                                        <span className="text-xs font-medium text-black/70 dark:text-white/70">Department</span>
-                                    </div>
-                                    {selectedDepartments.length > 0 && (
-                                        <button
-                                            onClick={() => setSelectedDepartments([])}
-                                            className="text-[10px] text-purple-600 hover:text-purple-500 dark:text-purple-400 dark:hover:text-purple-300"
-                                        >
-                                            Clear
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="grid grid-cols-2 gap-1.5">
-                                    {departments.map((dept) => (
-                                        <button
-                                            key={dept.id}
-                                            onClick={() => toggleDepartment(dept.id)}
-                                            className={cn(
-                                                'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-all',
-                                                selectedDepartments.includes(dept.id)
-                                                    ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300'
-                                                    : 'text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/5'
-                                            )}>
-                                            <div className={cn(
-                                                'flex size-3.5 items-center justify-center rounded border transition-all',
-                                                selectedDepartments.includes(dept.id)
-                                                    ? 'border-blue-500 bg-blue-500'
-                                                    : 'border-black/20 dark:border-white/20'
-                                            )}>
-                                                {selectedDepartments.includes(dept.id) && (
-                                                    <Check className="size-2 text-white" />
-                                                )}
-                                            </div>
-                                            <span className="text-xs truncate">{dept.label}</span>
-                                        </button>
-                                    ))}
-                                </div>
+                            <div className="grid grid-cols-2 gap-1.5">
+                                {seniorityLevels.map((level) => (
+                                    <button
+                                        key={level.id}
+                                        onClick={() => toggleSeniority(level.id)}
+                                        className={cn(
+                                            'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-all',
+                                            selectedSeniorities.includes(level.id)
+                                                ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300'
+                                                : 'text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/5'
+                                        )}>
+                                        <div className={cn(
+                                            'flex size-3.5 items-center justify-center rounded border transition-all',
+                                            selectedSeniorities.includes(level.id)
+                                                ? 'border-purple-500 bg-purple-500'
+                                                : 'border-black/20 dark:border-white/20'
+                                        )}>
+                                            {selectedSeniorities.includes(level.id) && (
+                                                <Check className="size-2 text-white" />
+                                            )}
+                                        </div>
+                                        <span className="text-xs">{level.label}</span>
+                                    </button>
+                                ))}
                             </div>
-
-                            <p className="text-[10px] text-black/30 dark:text-white/30 text-center">
-                                Leave filters empty to fetch all employees
-                            </p>
                         </div>
                     )}
                 </div>

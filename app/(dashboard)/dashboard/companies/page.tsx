@@ -58,7 +58,6 @@ export default function CompaniesPage() {
                 await enrichCompany(id, {
                     findContacts: true,
                     seniorities: options?.seniorities,
-                    departments: options?.departments,
                 })
             } catch (error) {
                 console.error('Error enriching company:', error)
