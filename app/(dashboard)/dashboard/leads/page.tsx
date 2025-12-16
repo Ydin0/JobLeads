@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import {
     Search,
@@ -19,6 +19,8 @@ import {
     Building2,
     Phone,
     Sparkles,
+    Filter,
+    X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useLeads } from '@/hooks/use-leads'
@@ -37,6 +39,20 @@ const statusConfig = {
     rejected: { label: 'Rejected', icon: UserX, color: 'bg-red-500/10 text-red-400 ring-red-500/20' },
 }
 
+interface AdvancedFilters {
+    country: string
+    company: string
+    hasPhone: 'all' | 'yes' | 'no'
+    hasEmail: 'all' | 'yes' | 'no'
+}
+
+const defaultFilters: AdvancedFilters = {
+    country: '',
+    company: '',
+    hasPhone: 'all',
+    hasEmail: 'all',
+}
+
 export default function LeadsPage() {
     const { leads, isLoading, updateLead, bulkEnrichLeads } = useLeads()
     const [searchQuery, setSearchQuery] = useState('')
@@ -47,7 +63,46 @@ export default function LeadsPage() {
     const [isEnriching, setIsEnriching] = useState(false)
     const [enrichModalOpen, setEnrichModalOpen] = useState(false)
     const [enrichModalLead, setEnrichModalLead] = useState<LeadWithCompany | null>(null)
+    const [showFilters, setShowFilters] = useState(false)
+    const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilters>(defaultFilters)
     const leadsPerPage = 10
+
+    // Reset to page 1 when filters change
+    useEffect(() => {
+        setCurrentPage(1)
+    }, [searchQuery, statusFilter, advancedFilters])
+
+    // Get unique countries and companies for filter dropdowns
+    const filterOptions = useMemo(() => {
+        const countries = new Set<string>()
+        const companies = new Set<string>()
+
+        ;(leads as LeadWithCompany[]).forEach(lead => {
+            if (lead.location) {
+                // Extract country from location (usually last part after comma)
+                const parts = lead.location.split(',').map(p => p.trim())
+                const country = parts[parts.length - 1]
+                if (country) countries.add(country)
+            }
+            if (lead.company?.name) {
+                companies.add(lead.company.name)
+            }
+        })
+
+        return {
+            countries: Array.from(countries).sort(),
+            companies: Array.from(companies).sort(),
+        }
+    }, [leads])
+
+    const activeFilterCount = useMemo(() => {
+        let count = 0
+        if (advancedFilters.country) count++
+        if (advancedFilters.company) count++
+        if (advancedFilters.hasPhone !== 'all') count++
+        if (advancedFilters.hasEmail !== 'all') count++
+        return count
+    }, [advancedFilters])
 
     // Get selected leads data for modal
     const selectedLeadsData = (leads as LeadWithCompany[]).filter(l => selectedLeads.includes(l.id))
@@ -95,16 +150,40 @@ export default function LeadsPage() {
         { label: 'Qualified', value: leads.filter(l => l.status === 'qualified').length, icon: UserCheck, color: 'from-green-500 to-emerald-500' },
     ]
 
-    const filteredLeads = (leads as LeadWithCompany[]).filter(lead => {
-        const companyName = lead.company?.name || ''
-        const matchesSearch =
-            `${lead.firstName} ${lead.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (lead.jobTitle?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
-            (lead.email?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
-            companyName.toLowerCase().includes(searchQuery.toLowerCase())
-        const matchesStatus = statusFilter === 'all' || lead.status === statusFilter
-        return matchesSearch && matchesStatus
-    })
+    const filteredLeads = useMemo(() => {
+        return (leads as LeadWithCompany[]).filter(lead => {
+            const companyName = lead.company?.name || ''
+
+            // Basic search
+            const matchesSearch = !searchQuery ||
+                `${lead.firstName} ${lead.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (lead.jobTitle?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
+                (lead.email?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false) ||
+                companyName.toLowerCase().includes(searchQuery.toLowerCase())
+
+            // Status filter
+            const matchesStatus = statusFilter === 'all' || lead.status === statusFilter
+
+            // Advanced filters
+            const matchesCountry = !advancedFilters.country ||
+                (lead.location?.toLowerCase().includes(advancedFilters.country.toLowerCase()) ?? false)
+
+            const matchesCompany = !advancedFilters.company ||
+                companyName.toLowerCase() === advancedFilters.company.toLowerCase()
+
+            const matchesHasPhone =
+                advancedFilters.hasPhone === 'all' ||
+                (advancedFilters.hasPhone === 'yes' && !!lead.phone) ||
+                (advancedFilters.hasPhone === 'no' && !lead.phone)
+
+            const matchesHasEmail =
+                advancedFilters.hasEmail === 'all' ||
+                (advancedFilters.hasEmail === 'yes' && !!lead.email) ||
+                (advancedFilters.hasEmail === 'no' && !lead.email)
+
+            return matchesSearch && matchesStatus && matchesCountry && matchesCompany && matchesHasPhone && matchesHasEmail
+        })
+    }, [leads, searchQuery, statusFilter, advancedFilters])
 
     const totalPages = Math.ceil(filteredLeads.length / leadsPerPage)
     const paginatedLeads = filteredLeads.slice(
@@ -226,8 +305,89 @@ export default function LeadsPage() {
                             </button>
                         ))}
                     </div>
+                    <button
+                        onClick={() => setShowFilters(!showFilters)}
+                        className={cn(
+                            'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all',
+                            showFilters || activeFilterCount > 0
+                                ? 'bg-purple-500/20 text-purple-400'
+                                : 'text-white/40 hover:bg-white/5 hover:text-white/60'
+                        )}>
+                        <Filter className="size-3" />
+                        Filters
+                        {activeFilterCount > 0 && (
+                            <span className="flex size-4 items-center justify-center rounded-full bg-purple-500 text-[10px] font-bold text-white">
+                                {activeFilterCount}
+                            </span>
+                        )}
+                    </button>
                 </div>
             </div>
+
+            {/* Advanced Filters Panel */}
+            {showFilters && (
+                <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-medium text-white">Advanced Filters</h3>
+                        {activeFilterCount > 0 && (
+                            <button
+                                onClick={() => setAdvancedFilters(defaultFilters)}
+                                className="text-xs text-white/40 hover:text-white/60 flex items-center gap-1">
+                                <X className="size-3" />
+                                Clear all
+                            </button>
+                        )}
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div>
+                            <label className="block text-xs text-white/40 mb-1.5">Country</label>
+                            <select
+                                value={advancedFilters.country}
+                                onChange={(e) => setAdvancedFilters(prev => ({ ...prev, country: e.target.value }))}
+                                className="h-8 w-full rounded-lg border border-white/10 bg-white/5 px-2.5 text-xs text-white focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/10">
+                                <option value="" className="bg-[#0a0a0f]">All countries</option>
+                                {filterOptions.countries.map(country => (
+                                    <option key={country} value={country} className="bg-[#0a0a0f]">{country}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs text-white/40 mb-1.5">Company</label>
+                            <select
+                                value={advancedFilters.company}
+                                onChange={(e) => setAdvancedFilters(prev => ({ ...prev, company: e.target.value }))}
+                                className="h-8 w-full rounded-lg border border-white/10 bg-white/5 px-2.5 text-xs text-white focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/10">
+                                <option value="" className="bg-[#0a0a0f]">All companies</option>
+                                {filterOptions.companies.map(company => (
+                                    <option key={company} value={company} className="bg-[#0a0a0f]">{company}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs text-white/40 mb-1.5">Has Phone</label>
+                            <select
+                                value={advancedFilters.hasPhone}
+                                onChange={(e) => setAdvancedFilters(prev => ({ ...prev, hasPhone: e.target.value as 'all' | 'yes' | 'no' }))}
+                                className="h-8 w-full rounded-lg border border-white/10 bg-white/5 px-2.5 text-xs text-white focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/10">
+                                <option value="all" className="bg-[#0a0a0f]">All</option>
+                                <option value="yes" className="bg-[#0a0a0f]">With phone</option>
+                                <option value="no" className="bg-[#0a0a0f]">Without phone</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs text-white/40 mb-1.5">Has Email</label>
+                            <select
+                                value={advancedFilters.hasEmail}
+                                onChange={(e) => setAdvancedFilters(prev => ({ ...prev, hasEmail: e.target.value as 'all' | 'yes' | 'no' }))}
+                                className="h-8 w-full rounded-lg border border-white/10 bg-white/5 px-2.5 text-xs text-white focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/10">
+                                <option value="all" className="bg-[#0a0a0f]">All</option>
+                                <option value="yes" className="bg-[#0a0a0f]">With email</option>
+                                <option value="no" className="bg-[#0a0a0f]">Without email</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Loading State */}
             {isLoading && (
@@ -241,10 +401,10 @@ export default function LeadsPage() {
                 <div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02]">
                     <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
                     <div className="overflow-x-auto">
-                        <table className="w-full">
+                        <table className="w-full table-fixed">
                             <thead>
                                 <tr className="border-b border-white/5 bg-white/[0.02]">
-                                    <th className="px-3 py-2.5 text-left">
+                                    <th className="w-10 px-3 py-2.5 text-left">
                                         <button
                                             onClick={toggleSelectAll}
                                             className={cn(
@@ -258,13 +418,13 @@ export default function LeadsPage() {
                                             )}
                                         </button>
                                     </th>
-                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-white/40">Contact</th>
-                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-white/40">Company</th>
-                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-white/40">Title</th>
-                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-white/40">Email</th>
-                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-white/40">Phone</th>
-                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-white/40">Status</th>
-                                    <th className="px-3 py-2.5 text-right text-xs font-medium text-white/40">Actions</th>
+                                    <th className="w-[180px] px-3 py-2.5 text-left text-xs font-medium text-white/40">Contact</th>
+                                    <th className="w-[140px] px-3 py-2.5 text-left text-xs font-medium text-white/40">Company</th>
+                                    <th className="w-[140px] px-3 py-2.5 text-left text-xs font-medium text-white/40">Title</th>
+                                    <th className="w-[180px] px-3 py-2.5 text-left text-xs font-medium text-white/40">Email</th>
+                                    <th className="w-[130px] px-3 py-2.5 text-left text-xs font-medium text-white/40">Phone</th>
+                                    <th className="w-[100px] px-3 py-2.5 text-left text-xs font-medium text-white/40">Status</th>
+                                    <th className="w-[130px] px-3 py-2.5 text-right text-xs font-medium text-white/40">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
@@ -295,33 +455,33 @@ export default function LeadsPage() {
 
                                             <td className="px-3 py-2.5">
                                                 <div className="flex items-center gap-2.5">
-                                                    <div className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-blue-500 text-xs font-bold text-white">
+                                                    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-blue-500 text-xs font-bold text-white">
                                                         {lead.firstName.charAt(0)}{lead.lastName.charAt(0)}
                                                     </div>
-                                                    <div className="min-w-0">
-                                                        <div className="text-sm font-medium text-white">
+                                                    <div className="min-w-0 overflow-hidden">
+                                                        <div className="truncate text-sm font-medium text-white">
                                                             {lead.firstName} {lead.lastName}
                                                         </div>
-                                                        <div className="text-xs text-white/30">{lead.location || '—'}</div>
+                                                        <div className="truncate text-xs text-white/30">{lead.location || '—'}</div>
                                                     </div>
                                                 </div>
                                             </td>
 
                                             <td className="px-3 py-2.5">
                                                 {lead.company ? (
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-2 overflow-hidden">
                                                         {lead.company.logoUrl ? (
                                                             <img
                                                                 src={lead.company.logoUrl}
                                                                 alt={lead.company.name}
-                                                                className="size-5 rounded object-cover"
+                                                                className="size-5 shrink-0 rounded object-cover"
                                                             />
                                                         ) : (
-                                                            <div className="flex size-5 items-center justify-center rounded bg-white/10 text-[10px] font-medium text-white">
+                                                            <div className="flex size-5 shrink-0 items-center justify-center rounded bg-white/10 text-[10px] font-medium text-white">
                                                                 {lead.company.name.charAt(0)}
                                                             </div>
                                                         )}
-                                                        <span className="text-xs text-white/60">{lead.company.name}</span>
+                                                        <span className="truncate text-xs text-white/60">{lead.company.name}</span>
                                                     </div>
                                                 ) : (
                                                     <span className="text-xs text-white/30">—</span>
@@ -329,16 +489,16 @@ export default function LeadsPage() {
                                             </td>
 
                                             <td className="px-3 py-2.5">
-                                                <span className="text-xs text-white/60">{lead.jobTitle || '—'}</span>
+                                                <span className="block truncate text-xs text-white/60">{lead.jobTitle || '—'}</span>
                                             </td>
 
                                             <td className="px-3 py-2.5">
                                                 {lead.email ? (
-                                                    <div className="flex items-center gap-1">
-                                                        <span className="text-xs text-white/60">{lead.email}</span>
+                                                    <div className="flex items-center gap-1 overflow-hidden">
+                                                        <span className="truncate text-xs text-white/60">{lead.email}</span>
                                                         <button
                                                             onClick={() => copyEmail(lead.email!)}
-                                                            className="rounded p-0.5 text-white/20 transition-colors hover:bg-white/10 hover:text-white">
+                                                            className="shrink-0 rounded p-0.5 text-white/20 transition-colors hover:bg-white/10 hover:text-white">
                                                             <Copy className="size-3" />
                                                         </button>
                                                     </div>

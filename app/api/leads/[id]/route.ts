@@ -82,7 +82,15 @@ export async function PATCH(req: Request, { params }: RouteContext) {
       );
     }
 
-    return NextResponse.json(updated);
+    // Fetch the full lead with company relationship
+    const leadWithCompany = await db.query.leads.findFirst({
+      where: eq(leads.id, id),
+      with: {
+        company: true,
+      },
+    });
+
+    return NextResponse.json(leadWithCompany);
   } catch (error) {
     console.error("Error updating lead:", error);
     return NextResponse.json(
