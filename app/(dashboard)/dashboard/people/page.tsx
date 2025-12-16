@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import {
     Search,
@@ -52,16 +52,19 @@ export default function PeoplePage() {
     const [selectedEmployees, setSelectedEmployees] = useState<string[]>([])
     const [isPromoting, setIsPromoting] = useState(false)
     const [showFilters, setShowFilters] = useState(false)
+    const isFirstRender = useRef(true)
 
-    // Debounce search
+    // Debounce search - skip initial render
     useEffect(() => {
+        if (isFirstRender.current) {
+            isFirstRender.current = false
+            return
+        }
         const timeout = setTimeout(() => {
-            if (searchQuery !== filters.search) {
-                updateFilters({ search: searchQuery || undefined })
-            }
+            updateFilters({ search: searchQuery || undefined })
         }, 300)
         return () => clearTimeout(timeout)
-    }, [searchQuery, filters.search, updateFilters])
+    }, [searchQuery]) // eslint-disable-line react-hooks/exhaustive-deps
 
     // Get unique companies for filter dropdown
     const uniqueCompanies = useMemo(() => {

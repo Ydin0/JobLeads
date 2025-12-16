@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Employee, Company } from '@/lib/db/schema'
 import { onDataRefresh } from '@/lib/events'
 
@@ -37,7 +37,10 @@ export function useEmployees(initialFilters: EmployeeFilters = {}, initialPage =
     totalPages: 0,
   })
 
-  const fetchEmployees = useCallback(async (pageNum = page, currentFilters = filters) => {
+  // Use ref to track if initial fetch has happened
+  const hasFetched = useRef(false)
+
+  const fetchEmployees = useCallback(async (pageNum: number, currentFilters: EmployeeFilters) => {
     try {
       setIsLoading(true)
 
@@ -63,19 +66,23 @@ export function useEmployees(initialFilters: EmployeeFilters = {}, initialPage =
     } finally {
       setIsLoading(false)
     }
-  }, [page, limit, filters])
+  }, [limit])
 
+  // Initial fetch only
   useEffect(() => {
-    fetchEmployees()
-  }, [fetchEmployees])
+    if (!hasFetched.current) {
+      hasFetched.current = true
+      fetchEmployees(page, filters)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Listen for data refresh events
   useEffect(() => {
     const unsubscribe = onDataRefresh(() => {
-      fetchEmployees()
+      fetchEmployees(page, filters)
     })
     return () => unsubscribe()
-  }, [fetchEmployees])
+  }, [fetchEmployees, page, filters])
 
   const goToPage = useCallback((newPage: number) => {
     setPage(newPage)
@@ -83,17 +90,23 @@ export function useEmployees(initialFilters: EmployeeFilters = {}, initialPage =
   }, [fetchEmployees, filters])
 
   const updateFilters = useCallback((newFilters: Partial<EmployeeFilters>) => {
-    const updatedFilters = { ...filters, ...newFilters }
-    setFilters(updatedFilters)
-    setPage(1) // Reset to first page when filters change
-    fetchEmployees(1, updatedFilters)
-  }, [filters, fetchEmployees])
+    setFilters(prev => {
+      const updatedFilters = { ...prev, ...newFilters }
+      setPage(1)
+      fetchEmployees(1, updatedFilters)
+      return updatedFilters
+    })
+  }, [fetchEmployees])
 
   const clearFilters = useCallback(() => {
     setFilters({})
     setPage(1)
     fetchEmployees(1, {})
   }, [fetchEmployees])
+
+  const refetch = useCallback(() => {
+    fetchEmployees(page, filters)
+  }, [fetchEmployees, page, filters])
 
   const promoteToLeads = async (employeeIds: string[]) => {
     const response = await fetch('/api/employees', {
@@ -125,7 +138,7 @@ export function useEmployees(initialFilters: EmployeeFilters = {}, initialPage =
     goToPage,
     updateFilters,
     clearFilters,
-    fetchEmployees,
+    refetch,
     promoteToLeads,
   }
 }
