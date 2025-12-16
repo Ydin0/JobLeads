@@ -17,8 +17,6 @@ export async function POST(req: Request) {
     const protocol = headersList.get("x-forwarded-proto") || "https";
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
     const webhookUrl = `${baseUrl}/api/webhooks/apollo/phones`;
-    // Apollo docs suggest URL encoding might be needed
-    const encodedWebhookUrl = encodeURI(webhookUrl);
 
     console.log("[Bulk Enrich] Webhook URL config:", {
       NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || "NOT SET",
@@ -26,7 +24,6 @@ export async function POST(req: Request) {
       protocol,
       baseUrl,
       webhookUrl,
-      encodedWebhookUrl,
     });
 
     const body = await req.json();
@@ -99,7 +96,7 @@ export async function POST(req: Request) {
         const enrichedPeople = await bulkEnrichPeople({
           apolloIds,
           revealPhoneNumber,
-          webhookUrl: revealPhoneNumber ? encodedWebhookUrl : undefined,
+          webhookUrl: revealPhoneNumber ? webhookUrl : undefined,
         });
 
         if (revealPhoneNumber) {

@@ -480,20 +480,19 @@ export async function bulkEnrichPeople(params: {
     throw new Error("webhookUrl is required when revealPhoneNumber is true");
   }
 
-  // Build details array with person IDs
-  const details = apolloIds.map(id => ({
-    id,
-    reveal_phone_number: revealPhoneNumber,
-  }));
+  // Build details array with person IDs only
+  const details = apolloIds.map(id => ({ id }));
 
   // Build request body
+  // reveal_phone_number and webhook_url must be at the top level, not per-person
   const requestBody: Record<string, unknown> = { details };
 
-  // Add webhook URL if revealing phone numbers
-  // Phone numbers are delivered asynchronously to this webhook
-  if (revealPhoneNumber && webhookUrl) {
+  // Add phone reveal settings at top level if requested
+  // Phone numbers are delivered asynchronously to the webhook
+  if (revealPhoneNumber) {
+    requestBody.reveal_phone_number = true;
     requestBody.webhook_url = webhookUrl;
-    console.log("[Apollo] Phone numbers will be delivered to webhook:", webhookUrl);
+    console.log("[Apollo] Phone reveal enabled. Webhook URL:", webhookUrl);
   }
 
   console.log("[Apollo] Bulk enriching", apolloIds.length, "people, reveal_phone:", revealPhoneNumber);
