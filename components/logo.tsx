@@ -3,16 +3,13 @@ import Image from 'next/image'
 
 export const Logo = ({ className }: { className?: string }) => {
     return (
-        <div className={cn('flex items-center gap-2', className)}>
-            <Image
-                src="/Group.svg"
-                alt="RecLead"
-                width={32}
-                height={32}
-                className="size-8"
-            />
-            <span className="text-xl font-bold text-foreground">RecLead</span>
-        </div>
+        <Image
+            src="/Group.svg"
+            alt="RecLead"
+            width={120}
+            height={32}
+            className={cn('h-8 w-auto', className)}
+        />
     )
 }
 

@@ -46,15 +46,14 @@ export function DashboardSidebar() {
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.05] to-transparent" />
 
             <div className="relative flex h-14 items-center border-b border-white/5 px-6">
-                <Link href="/dashboard" className="flex items-center gap-2">
+                <Link href="/dashboard">
                     <Image
                         src="/Group.svg"
                         alt="RecLead"
-                        width={32}
+                        width={120}
                         height={32}
-                        className="size-8"
+                        className="h-8 w-auto"
                     />
-                    <span className="text-lg font-bold">RecLead</span>
                 </Link>
             </div>
 
