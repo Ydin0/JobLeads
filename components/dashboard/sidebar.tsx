@@ -50,9 +50,9 @@ export function DashboardSidebar() {
                     <Image
                         src="/Group.svg"
                         alt="RecLead"
-                        width={120}
-                        height={32}
-                        className="h-8 w-auto"
+                        width={100}
+                        height={24}
+                        className="h-6 w-auto"
                     />
                 </Link>
             </div>
