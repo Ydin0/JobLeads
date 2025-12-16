@@ -51,25 +51,16 @@ export async function POST(req: Request) {
         // Find and update leads with this Apollo ID in their metadata
         // Using raw SQL to query JSONB field
         // Set phonePending to false and update phone number (if found)
-        const phoneFoundValue = hasPhone ? sql`true::jsonb` : sql`false::jsonb`;
+        const now = new Date();
+        const phoneUpdatedAt = JSON.stringify(now.toISOString());
         const result = await db
           .update(leads)
           .set({
             ...(hasPhone ? { phone: primaryPhone } : {}),
-            metadata: sql`jsonb_set(
-              jsonb_set(
-                jsonb_set(
-                  COALESCE(${leads.metadata}, '{}'),
-                  '{phoneUpdatedAt}',
-                  ${JSON.stringify(new Date().toISOString())}::jsonb
-                ),
-                '{phonePending}',
-                false::jsonb
-              ),
-              '{phoneFound}',
-              ${phoneFoundValue}
-            )`,
-            updatedAt: new Date(),
+            metadata: hasPhone
+              ? sql`jsonb_set(jsonb_set(jsonb_set(COALESCE(${leads.metadata}, '{}'), '{phoneUpdatedAt}', ${phoneUpdatedAt}::jsonb), '{phonePending}', 'false'::jsonb), '{phoneFound}', 'true'::jsonb)`
+              : sql`jsonb_set(jsonb_set(jsonb_set(COALESCE(${leads.metadata}, '{}'), '{phoneUpdatedAt}', ${phoneUpdatedAt}::jsonb), '{phonePending}', 'false'::jsonb), '{phoneFound}', 'false'::jsonb)`,
+            updatedAt: now,
           })
           .where(sql`${leads.metadata}->>'apolloId' = ${apolloId}`)
           .returning({ id: leads.id });
