@@ -15,6 +15,9 @@ import {
     Circle,
     Loader2,
     Linkedin,
+    ChevronLeft,
+    ChevronRight,
+    UserPlus,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useCompanies } from '@/hooks/use-companies'
@@ -37,7 +40,7 @@ interface CompanyMetadata {
 }
 
 export default function CompaniesPage() {
-    const { companies, isLoading, enrichCompany, fetchCompanies } = useCompanies()
+    const { companies, isLoading, enrichCompany, fetchCompanies, pagination, goToPage } = useCompanies(1, 20)
     const [searchQuery, setSearchQuery] = useState('')
     const [enrichmentFilter, setEnrichmentFilter] = useState<'all' | 'enriched' | 'not_enriched'>('all')
     const [selectedCompanies, setSelectedCompanies] = useState<string[]>([])
@@ -90,7 +93,7 @@ export default function CompaniesPage() {
     const stats = [
         {
             label: 'Total Companies',
-            value: companies.length,
+            value: pagination.totalCount,
             icon: Building2,
             color: 'from-blue-500 to-cyan-500',
         },
@@ -104,16 +107,16 @@ export default function CompaniesPage() {
             color: 'from-purple-500 to-pink-500',
         },
         {
-            label: 'Enriched',
-            value: companies.filter(c => c.isEnriched).length,
-            icon: CheckCircle2,
+            label: 'Total Employees',
+            value: companies.reduce((acc, c) => acc + ((c as unknown as { employeesCount: number }).employeesCount || 0), 0),
+            icon: UserPlus,
             color: 'from-green-500 to-emerald-500',
         },
         {
-            label: 'Pending',
-            value: companies.filter(c => !c.isEnriched).length,
-            icon: Circle,
-            color: 'from-orange-500 to-amber-500',
+            label: 'Enriched',
+            value: companies.filter(c => c.isEnriched).length,
+            icon: CheckCircle2,
+            color: 'from-cyan-500 to-blue-500',
         },
     ]
 
@@ -267,6 +270,7 @@ export default function CompaniesPage() {
                                     </th>
                                     <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Company</th>
                                     <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Jobs</th>
+                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Employees</th>
                                     <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Location</th>
                                     <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Size</th>
                                     <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Status</th>
@@ -331,6 +335,20 @@ export default function CompaniesPage() {
                                             </td>
 
                                             <td className="px-3 py-2.5">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className={cn(
+                                                        "rounded-md px-2 py-0.5 text-xs font-semibold",
+                                                        (company as unknown as { employeesCount: number }).employeesCount > 0
+                                                            ? "bg-green-500/10 text-green-400"
+                                                            : "bg-black/5 text-black/30 dark:bg-white/5 dark:text-white/30"
+                                                    )}>
+                                                        {(company as unknown as { employeesCount: number }).employeesCount || 0}
+                                                    </span>
+                                                    <span className="text-[10px] text-black/30 dark:text-white/30">people</span>
+                                                </div>
+                                            </td>
+
+                                            <td className="px-3 py-2.5">
                                                 <div className="flex items-center gap-1 text-xs text-black/60 dark:text-white/60">
                                                     <MapPin className="size-3 text-black/30 dark:text-white/30" />
                                                     <span className="max-w-[120px] truncate">{company.location || 'Unknown'}</span>
@@ -375,32 +393,40 @@ export default function CompaniesPage() {
                                                             <ExternalLink className="size-3.5" />
                                                         </a>
                                                     )}
-                                                    {!company.isEnriched ? (
-                                                        <Button
-                                                            size="sm"
-                                                            onClick={() => openEnrichModal(company)}
-                                                            disabled={enrichingIds.has(company.id)}
-                                                            className="h-7 w-[72px] bg-gradient-to-r from-purple-500 to-blue-500 text-[10px] text-white hover:from-purple-600 hover:to-blue-600">
-                                                            {enrichingIds.has(company.id) ? (
-                                                                <Loader2 className="size-3 animate-spin" />
-                                                            ) : (
-                                                                <>
-                                                                    <Sparkles className="mr-1 size-2.5" />
-                                                                    Enrich
-                                                                </>
-                                                            )}
-                                                        </Button>
-                                                    ) : (
-                                                        <Link href="/dashboard/leads">
+                                                    {(() => {
+                                                        const employeesCount = (company as unknown as { employeesCount: number }).employeesCount || 0
+                                                        const canEnrich = !company.isEnriched || employeesCount === 0
+
+                                                        if (canEnrich) {
+                                                            return (
+                                                                <Button
+                                                                    size="sm"
+                                                                    onClick={() => openEnrichModal(company)}
+                                                                    disabled={enrichingIds.has(company.id)}
+                                                                    className="h-7 w-[72px] bg-gradient-to-r from-purple-500 to-blue-500 text-[10px] text-white hover:from-purple-600 hover:to-blue-600">
+                                                                    {enrichingIds.has(company.id) ? (
+                                                                        <Loader2 className="size-3 animate-spin" />
+                                                                    ) : (
+                                                                        <>
+                                                                            <Sparkles className="mr-1 size-2.5" />
+                                                                            {company.isEnriched ? 'Retry' : 'Enrich'}
+                                                                        </>
+                                                                    )}
+                                                                </Button>
+                                                            )
+                                                        }
+
+                                                        return (
                                                             <Button
                                                                 size="sm"
                                                                 variant="ghost"
+                                                                onClick={() => setSelectedCompanyId(company.id)}
                                                                 className="h-7 w-[72px] text-[10px] text-purple-400 hover:bg-purple-500/10 hover:text-purple-300">
                                                                 <Users className="mr-1 size-2.5" />
-                                                                Leads
+                                                                View
                                                             </Button>
-                                                        </Link>
-                                                    )}
+                                                        )
+                                                    })()}
                                                 </div>
                                             </td>
                                         </tr>
@@ -409,6 +435,69 @@ export default function CompaniesPage() {
                             </tbody>
                         </table>
                     </div>
+
+                    {/* Pagination Controls */}
+                    {pagination.totalPages > 1 && (
+                        <div className="flex items-center justify-between border-t border-black/5 px-4 py-3 dark:border-white/5">
+                            <div className="text-xs text-black/40 dark:text-white/40">
+                                Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.totalCount)} of {pagination.totalCount} companies
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => goToPage(pagination.page - 1)}
+                                    disabled={pagination.page === 1}
+                                    className={cn(
+                                        "flex size-8 items-center justify-center rounded-lg border transition-all",
+                                        pagination.page === 1
+                                            ? "cursor-not-allowed border-black/5 text-black/20 dark:border-white/5 dark:text-white/20"
+                                            : "border-black/10 text-black/60 hover:bg-black/5 hover:text-black dark:border-white/10 dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white"
+                                    )}>
+                                    <ChevronLeft className="size-4" />
+                                </button>
+                                <div className="flex items-center gap-1">
+                                    {Array.from({ length: pagination.totalPages }, (_, i) => i + 1)
+                                        .filter(p => {
+                                            // Show first, last, current, and adjacent pages
+                                            if (p === 1 || p === pagination.totalPages) return true
+                                            if (Math.abs(p - pagination.page) <= 1) return true
+                                            return false
+                                        })
+                                        .map((p, idx, arr) => {
+                                            // Add ellipsis if there's a gap
+                                            const showEllipsisBefore = idx > 0 && p - arr[idx - 1] > 1
+                                            return (
+                                                <div key={p} className="flex items-center gap-1">
+                                                    {showEllipsisBefore && (
+                                                        <span className="px-1 text-black/30 dark:text-white/30">...</span>
+                                                    )}
+                                                    <button
+                                                        onClick={() => goToPage(p)}
+                                                        className={cn(
+                                                            "flex size-8 items-center justify-center rounded-lg text-xs font-medium transition-all",
+                                                            pagination.page === p
+                                                                ? "bg-purple-500 text-white"
+                                                                : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white"
+                                                        )}>
+                                                        {p}
+                                                    </button>
+                                                </div>
+                                            )
+                                        })}
+                                </div>
+                                <button
+                                    onClick={() => goToPage(pagination.page + 1)}
+                                    disabled={pagination.page === pagination.totalPages}
+                                    className={cn(
+                                        "flex size-8 items-center justify-center rounded-lg border transition-all",
+                                        pagination.page === pagination.totalPages
+                                            ? "cursor-not-allowed border-black/5 text-black/20 dark:border-white/5 dark:text-white/20"
+                                            : "border-black/10 text-black/60 hover:bg-black/5 hover:text-black dark:border-white/10 dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white"
+                                    )}>
+                                    <ChevronRight className="size-4" />
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 

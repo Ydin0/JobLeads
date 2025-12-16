@@ -332,120 +332,156 @@ export async function enrichOrganization(domain: string): Promise<EnrichedCompan
 }
 
 /**
- * Search for people at a company
+ * Search for people at a company - fetches ALL employees by paginating through results
+ * @param maxPages - Maximum number of pages to fetch (default 10, max 100 people per page = 1000 people)
  */
 export async function searchPeopleAtCompany(params: {
   organizationName?: string;
   organizationDomain?: string;
   titles?: string[];
   seniorities?: string[];
-  limit?: number;
+  limit?: number; // Deprecated - we now fetch all
+  maxPages?: number;
 }): Promise<EnrichedPerson[]> {
   if (!APOLLO_API_KEY) {
     throw new Error("APOLLO_API_KEY is not configured");
   }
 
-  const { organizationName, organizationDomain, titles, seniorities, limit = 10 } = params;
+  const { organizationName, organizationDomain, titles, seniorities, maxPages = 10 } = params;
+  const perPage = 100; // Max allowed by Apollo API
 
-  const requestBody: Record<string, unknown> = {
-    per_page: limit,
-    page: 1,
-  };
+  const baseRequestBody: Record<string, unknown> = {};
 
   // Use domain list if available (preferred), otherwise fall back to org name
   if (organizationDomain) {
-    requestBody.q_organization_domains_list = [organizationDomain];
+    baseRequestBody.q_organization_domains_list = [organizationDomain];
   } else if (organizationName) {
     // Fallback to organization name if no domain available
-    requestBody.q_organization_name = organizationName;
+    baseRequestBody.q_organization_name = organizationName;
   }
   if (titles && titles.length > 0) {
-    requestBody.person_titles = titles;
+    baseRequestBody.person_titles = titles;
   }
   if (seniorities && seniorities.length > 0) {
-    requestBody.person_seniorities = seniorities;
+    baseRequestBody.person_seniorities = seniorities;
   }
 
-  console.log("[Apollo] Searching people:", requestBody);
+  // Note: api_search returns obfuscated data - last_name_obfuscated instead of last_name
+  interface SearchPerson {
+    id: string;
+    first_name: string;
+    last_name?: string;
+    last_name_obfuscated?: string;
+    title?: string;
+    email?: string;
+    linkedin_url?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+    seniority?: string;
+    departments?: string[];
+    phone_numbers?: Array<{ sanitized_number: string; status: string }>;
+    organization?: {
+      name: string;
+      website_url?: string;
+      linkedin_url?: string;
+      logo_url?: string;
+    };
+  }
+
+  const mapPerson = (person: SearchPerson): EnrichedPerson | null => {
+    if (!person) return null;
+
+    const primaryPhone = person.phone_numbers?.find(p => p.status === "verified")?.sanitized_number
+      || person.phone_numbers?.[0]?.sanitized_number
+      || null;
+
+    const locationParts = [person.city, person.state, person.country].filter(Boolean);
+    const location = locationParts.length > 0 ? locationParts.join(", ") : null;
+
+    // Use last_name if available, otherwise use obfuscated or "Unknown"
+    const lastName = person.last_name || person.last_name_obfuscated || "Unknown";
+
+    return {
+      apolloId: person.id || null,
+      firstName: person.first_name,
+      lastName,
+      email: person.email || null,
+      phone: primaryPhone,
+      jobTitle: person.title || null,
+      linkedinUrl: person.linkedin_url || null,
+      location,
+      seniority: person.seniority || null,
+      departments: person.departments || [],
+      company: person.organization ? {
+        name: person.organization.name,
+        website: person.organization.website_url || null,
+        linkedinUrl: person.organization.linkedin_url || null,
+        logoUrl: person.organization.logo_url || null,
+      } : null,
+    };
+  };
+
+  const allPeople: EnrichedPerson[] = [];
+  let currentPage = 1;
+  let totalEntries = 0;
+  let hasMore = true;
+
+  console.log("[Apollo] Starting paginated search for all employees...");
 
   try {
-    const response = await fetch(`${APOLLO_BASE_URL}/mixed_people/api_search`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache",
-        "X-Api-Key": APOLLO_API_KEY,
-      },
-      body: JSON.stringify(requestBody),
-    });
+    while (hasMore && currentPage <= maxPages) {
+      const requestBody = {
+        ...baseRequestBody,
+        per_page: perPage,
+        page: currentPage,
+      };
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("[Apollo] API error:", response.status, errorText);
-      throw new Error(`Apollo API error: ${response.status} - ${errorText}`);
+      console.log(`[Apollo] Fetching page ${currentPage}...`);
+
+      const response = await fetch(`${APOLLO_BASE_URL}/mixed_people/api_search`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+          "X-Api-Key": APOLLO_API_KEY,
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("[Apollo] API error:", response.status, errorText);
+        throw new Error(`Apollo API error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+
+      if (currentPage === 1) {
+        totalEntries = data.pagination?.total_entries || data.total_entries || 0;
+        console.log(`[Apollo] Total employees available: ${totalEntries}`);
+      }
+
+      const pagePeople = (data.people || [])
+        .map(mapPerson)
+        .filter((p: EnrichedPerson | null): p is EnrichedPerson => p !== null);
+
+      allPeople.push(...pagePeople);
+      console.log(`[Apollo] Page ${currentPage}: fetched ${pagePeople.length} employees (total so far: ${allPeople.length})`);
+
+      // Check if we have more pages
+      const totalPages = Math.ceil(totalEntries / perPage);
+      hasMore = currentPage < totalPages && pagePeople.length > 0;
+      currentPage++;
+
+      // Small delay to avoid rate limiting
+      if (hasMore) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
     }
 
-    const data = await response.json();
-    console.log("[Apollo] Search response:", data);
-
-    // Note: api_search returns obfuscated data - last_name_obfuscated instead of last_name
-    // We need to handle this differently from enrichment responses
-    interface SearchPerson {
-      id: string;
-      first_name: string;
-      last_name?: string;
-      last_name_obfuscated?: string;
-      title?: string;
-      email?: string;
-      linkedin_url?: string;
-      city?: string;
-      state?: string;
-      country?: string;
-      seniority?: string;
-      departments?: string[];
-      phone_numbers?: Array<{ sanitized_number: string; status: string }>;
-      organization?: {
-        name: string;
-        website_url?: string;
-        linkedin_url?: string;
-        logo_url?: string;
-      };
-    }
-
-    const people: EnrichedPerson[] = (data.people || []).map((person: SearchPerson) => {
-      if (!person) return null;
-
-      const primaryPhone = person.phone_numbers?.find(p => p.status === "verified")?.sanitized_number
-        || person.phone_numbers?.[0]?.sanitized_number
-        || null;
-
-      const locationParts = [person.city, person.state, person.country].filter(Boolean);
-      const location = locationParts.length > 0 ? locationParts.join(", ") : null;
-
-      // Use last_name if available, otherwise use obfuscated or "Unknown"
-      const lastName = person.last_name || person.last_name_obfuscated || "Unknown";
-
-      return {
-        apolloId: person.id || null,
-        firstName: person.first_name,
-        lastName,
-        email: person.email || null,
-        phone: primaryPhone,
-        jobTitle: person.title || null,
-        linkedinUrl: person.linkedin_url || null,
-        location,
-        seniority: person.seniority || null,
-        departments: person.departments || [],
-        company: person.organization ? {
-          name: person.organization.name,
-          website: person.organization.website_url || null,
-          linkedinUrl: person.organization.linkedin_url || null,
-          logoUrl: person.organization.logo_url || null,
-        } : null,
-      };
-    }).filter(Boolean);
-
-    return people;
+    console.log(`[Apollo] Finished fetching. Total employees retrieved: ${allPeople.length} of ${totalEntries}`);
+    return allPeople;
   } catch (error) {
     console.error("[Apollo] Error searching people:", error);
     throw error;

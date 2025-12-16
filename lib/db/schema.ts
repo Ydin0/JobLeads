@@ -140,11 +140,33 @@ export const jobs = pgTable("jobs", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-// Leads table - contact leads from companies
+// Employees table - all contacts found from company enrichment
+export const employees = pgTable("employees", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  orgId: varchar("org_id", { length: 255 }).notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  firstName: varchar("first_name", { length: 255 }).notNull(),
+  lastName: varchar("last_name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }),
+  phone: varchar("phone", { length: 50 }),
+  jobTitle: varchar("job_title", { length: 255 }),
+  linkedinUrl: text("linkedin_url"),
+  location: varchar("location", { length: 255 }),
+  seniority: varchar("seniority", { length: 100 }),
+  department: varchar("department", { length: 255 }),
+  isShortlisted: boolean("is_shortlisted").default(false),
+  apolloId: varchar("apollo_id", { length: 255 }),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Leads table - shortlisted contacts for outreach
 export const leads = pgTable("leads", {
   id: uuid("id").defaultRandom().primaryKey(),
   orgId: varchar("org_id", { length: 255 }).notNull().references(() => organizations.id, { onDelete: "cascade" }),
   companyId: uuid("company_id").references(() => companies.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").references(() => employees.id, { onDelete: "set null" }),
   searchId: uuid("search_id").references(() => searches.id, { onDelete: "set null" }),
   firstName: varchar("first_name", { length: 255 }).notNull(),
   lastName: varchar("last_name", { length: 255 }).notNull(),
@@ -175,6 +197,7 @@ export const organizationsRelations = relations(organizations, ({ one, many }) =
   members: many(organizationMembers),
   searches: many(searches),
   companies: many(companies),
+  employees: many(employees),
   leads: many(leads),
 }));
 
@@ -213,6 +236,7 @@ export const companiesRelations = relations(companies, ({ one, many }) => ({
     references: [searches.id],
   }),
   jobs: many(jobs),
+  employees: many(employees),
   leads: many(leads),
 }));
 
@@ -231,6 +255,17 @@ export const jobsRelations = relations(jobs, ({ one }) => ({
   }),
 }));
 
+export const employeesRelations = relations(employees, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [employees.orgId],
+    references: [organizations.id],
+  }),
+  company: one(companies, {
+    fields: [employees.companyId],
+    references: [companies.id],
+  }),
+}));
+
 export const leadsRelations = relations(leads, ({ one }) => ({
   organization: one(organizations, {
     fields: [leads.orgId],
@@ -239,6 +274,10 @@ export const leadsRelations = relations(leads, ({ one }) => ({
   company: one(companies, {
     fields: [leads.companyId],
     references: [companies.id],
+  }),
+  employee: one(employees, {
+    fields: [leads.employeeId],
+    references: [employees.id],
   }),
   search: one(searches, {
     fields: [leads.searchId],
@@ -259,5 +298,7 @@ export type Company = typeof companies.$inferSelect;
 export type NewCompany = typeof companies.$inferInsert;
 export type Job = typeof jobs.$inferSelect;
 export type NewJob = typeof jobs.$inferInsert;
+export type Employee = typeof employees.$inferSelect;
+export type NewEmployee = typeof employees.$inferInsert;
 export type Lead = typeof leads.$inferSelect;
 export type NewLead = typeof leads.$inferInsert;

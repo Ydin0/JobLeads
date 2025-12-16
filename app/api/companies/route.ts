@@ -2,22 +2,55 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { companies } from "@/lib/db/schema";
 import { requireOrgAuth } from "@/lib/auth";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, count } from "drizzle-orm";
 
-// GET /api/companies - List all companies for the organization
-export async function GET() {
+// GET /api/companies - List all companies for the organization with pagination
+export async function GET(req: Request) {
   try {
     const { orgId } = await requireOrgAuth();
+    const { searchParams } = new URL(req.url);
 
+    const page = parseInt(searchParams.get("page") || "1", 10);
+    const limit = parseInt(searchParams.get("limit") || "20", 10);
+    const offset = (page - 1) * limit;
+
+    // Get total count for pagination
+    const [{ totalCount }] = await db
+      .select({ totalCount: count() })
+      .from(companies)
+      .where(eq(companies.orgId, orgId));
+
+    // Get companies with employees count
     const results = await db.query.companies.findMany({
       where: eq(companies.orgId, orgId),
       orderBy: [desc(companies.createdAt)],
+      limit,
+      offset,
       with: {
         search: true,
+        employees: true,
+        leads: true,
       },
     });
 
-    return NextResponse.json(results);
+    // Transform to include employeesCount and leadsCount
+    const companiesWithCounts = results.map((company) => ({
+      ...company,
+      employeesCount: company.employees?.length || 0,
+      leadsCount: company.leads?.length || 0,
+      employees: undefined, // Remove arrays to keep response small
+      leads: undefined,
+    }));
+
+    return NextResponse.json({
+      companies: companiesWithCounts,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+      },
+    });
   } catch (error) {
     console.error("Error fetching companies:", error);
     return NextResponse.json(

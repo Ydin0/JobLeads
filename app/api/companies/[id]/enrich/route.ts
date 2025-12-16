@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { companies, leads } from "@/lib/db/schema";
+import { companies, employees } from "@/lib/db/schema";
 import { requireOrgAuth } from "@/lib/auth";
 import { eq, and } from "drizzle-orm";
 import { searchPeopleAtCompany, EnrichedPerson } from "@/lib/apollo";
@@ -16,7 +16,7 @@ export async function POST(req: Request, { params }: RouteContext) {
 
     // Get options from request body
     const body = await req.json().catch(() => ({}));
-    const { findContacts = true, contactTitles, contactLimit = 5 } = body;
+    const { findContacts = true, contactTitles } = body;
 
     // Get the company
     const company = await db.query.companies.findFirst({
@@ -88,10 +88,7 @@ export async function POST(req: Request, { params }: RouteContext) {
           organizationName?: string;
           organizationDomain?: string;
           titles?: string[];
-          limit?: number;
-        } = {
-          limit: contactLimit,
-        };
+        } = {};
 
         // Use domain from PDL enrichment, or existing company data
         const domain = enrichedCompanyData?.domain || company.domain;
@@ -110,10 +107,10 @@ export async function POST(req: Request, { params }: RouteContext) {
         const people = await searchPeopleAtCompany(searchParams);
         console.log("[Enrich Company] Found", people.length, "contacts from Apollo");
 
-        // Create leads from found contacts
+        // Create employees from found contacts
         for (const person of people) {
           try {
-            await db.insert(leads).values({
+            await db.insert(employees).values({
               orgId,
               companyId: id,
               firstName: person.firstName,
@@ -123,18 +120,19 @@ export async function POST(req: Request, { params }: RouteContext) {
               jobTitle: person.jobTitle,
               linkedinUrl: person.linkedinUrl,
               location: person.location,
-              status: "new",
+              seniority: person.seniority,
+              department: person.departments?.[0] || null,
+              apolloId: person.apolloId,
+              isShortlisted: false,
               metadata: {
                 source: "apollo_enrichment",
-                apolloId: person.apolloId,
-                seniority: person.seniority,
                 departments: person.departments,
                 enrichedAt: new Date().toISOString(),
               },
             }).onConflictDoNothing();
             contactsFound.push(person);
           } catch (err) {
-            console.error("[Enrich Company] Error creating lead:", err);
+            console.error("[Enrich Company] Error creating employee:", err);
           }
         }
       } catch (error) {
@@ -142,13 +140,13 @@ export async function POST(req: Request, { params }: RouteContext) {
       }
     }
 
-    console.log("[Enrich Company] Company enriched successfully");
+    console.log("[Enrich Company] Company enriched successfully with", contactsFound.length, "employees");
 
     return NextResponse.json({
       success: true,
       company: updatedCompany,
       enrichedData: enrichedCompanyData,
-      contactsFound: contactsFound.length,
+      employeesFound: contactsFound.length,
     });
   } catch (error) {
     console.error("Error enriching company:", error);
