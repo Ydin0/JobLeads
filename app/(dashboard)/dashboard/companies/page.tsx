@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils'
 import { useCompanies } from '@/hooks/use-companies'
 import Link from 'next/link'
 import { CompanyDetailDialog } from '@/components/dashboard/company-detail-dialog'
-import { EnrichOptionsModal, EnrichOptions } from '@/components/dashboard/enrich-options-modal'
+import { EnrichOptionsModal } from '@/components/dashboard/enrich-options-modal'
 
 interface JobMetadata {
     id: string
@@ -49,16 +49,13 @@ export default function CompaniesPage() {
     const [enrichModalOpen, setEnrichModalOpen] = useState(false)
     const [companyToEnrich, setCompanyToEnrich] = useState<{ id: string; name: string; logo: string } | null>(null)
 
-    const handleEnrich = async (options?: EnrichOptions) => {
+    const handleEnrich = async () => {
         const idsToEnrich = companyToEnrich ? [companyToEnrich.id] : selectedCompanies
 
         for (const id of idsToEnrich) {
             setEnrichingIds(prev => new Set(prev).add(id))
             try {
-                await enrichCompany(id, {
-                    findContacts: true,
-                    seniorities: options?.seniorities,
-                })
+                await enrichCompany(id)
             } catch (error) {
                 console.error('Error enriching company:', error)
             } finally {

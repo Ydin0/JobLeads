@@ -15,6 +15,7 @@ import {
     HelpCircle,
     LogOut,
     Sparkles,
+    Contact,
 } from 'lucide-react'
 import { PricingModal } from './pricing-modal'
 
@@ -22,6 +23,7 @@ const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Searches', href: '/dashboard/searches', icon: Search },
     { name: 'Companies', href: '/dashboard/companies', icon: Building2 },
+    { name: 'People', href: '/dashboard/people', icon: Contact },
     { name: 'Leads', href: '/dashboard/leads', icon: Users },
 ]
 

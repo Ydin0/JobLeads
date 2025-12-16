@@ -16,7 +16,7 @@ export async function POST(req: Request, { params }: RouteContext) {
 
     // Get options from request body
     const body = await req.json().catch(() => ({}));
-    const { findContacts = true, seniorities } = body;
+    const { findContacts = true } = body;
 
     // Get the company
     const company = await db.query.companies.findFirst({
@@ -98,11 +98,6 @@ export async function POST(req: Request, { params }: RouteContext) {
         } else {
           searchParams.organizationName = company.name;
           console.log("[Enrich Company] No domain available, searching contacts by name:", company.name);
-        }
-
-        if (seniorities && seniorities.length > 0) {
-          searchParams.seniorities = seniorities;
-          console.log("[Enrich Company] Filtering by seniorities:", seniorities);
         }
 
         const people = await searchPeopleAtCompany(searchParams);

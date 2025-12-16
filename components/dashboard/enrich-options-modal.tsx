@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
     X,
@@ -9,11 +8,7 @@ import {
     Users,
     Globe,
     Zap,
-    ChevronDown,
-    Check,
-    Filter,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
 
 interface Company {
     id: string
@@ -21,58 +16,23 @@ interface Company {
     logo: string
 }
 
-export interface EnrichOptions {
-    seniorities?: string[]
-}
-
 interface EnrichOptionsModalProps {
     company?: Company | null
     companies?: Company[]
     open: boolean
     onOpenChange: (open: boolean) => void
-    onEnrich: (options?: EnrichOptions) => void
+    onEnrich: () => void
 }
 
-const seniorityLevels = [
-    { id: 'owner', label: 'Owner' },
-    { id: 'founder', label: 'Founder' },
-    { id: 'c_suite', label: 'C-Suite' },
-    { id: 'partner', label: 'Partner' },
-    { id: 'vp', label: 'VP' },
-    { id: 'head', label: 'Head' },
-    { id: 'director', label: 'Director' },
-    { id: 'manager', label: 'Manager' },
-    { id: 'senior', label: 'Senior' },
-    { id: 'entry', label: 'Entry' },
-]
-
 export function EnrichOptionsModal({ company, companies, open, onOpenChange, onEnrich }: EnrichOptionsModalProps) {
-    const [showFilters, setShowFilters] = useState(false)
-    const [selectedSeniorities, setSelectedSeniorities] = useState<string[]>([])
-
     const isBulk = companies && companies.length > 0
     const companyCount = isBulk ? companies.length : 1
 
     if (!open || (!company && !isBulk)) return null
 
-    const toggleSeniority = (id: string) => {
-        setSelectedSeniorities(prev =>
-            prev.includes(id)
-                ? prev.filter(s => s !== id)
-                : [...prev, id]
-        )
-    }
-
     const handleEnrich = () => {
-        const options: EnrichOptions = {}
-        if (selectedSeniorities.length > 0) {
-            options.seniorities = selectedSeniorities
-        }
-        onEnrich(Object.keys(options).length > 0 ? options : undefined)
+        onEnrich()
         onOpenChange(false)
-        // Reset state for next open
-        setShowFilters(false)
-        setSelectedSeniorities([])
     }
 
     // Credit calculation: 1 credit per company for enrichment
@@ -116,7 +76,7 @@ export function EnrichOptionsModal({ company, companies, open, onOpenChange, onE
                 </div>
 
                 {/* Content */}
-                <div className="relative max-h-[60vh] flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="relative flex-1 p-4 space-y-4">
                     {/* Company Info */}
                     {isBulk ? (
                         <div className="flex items-center gap-3 rounded-lg border border-black/5 bg-black/[0.02] p-3 dark:border-white/5 dark:bg-white/[0.02]">
@@ -158,15 +118,8 @@ export function EnrichOptionsModal({ company, companies, open, onOpenChange, onE
                                     <Users className="size-4 text-purple-500 dark:text-purple-400" />
                                 </div>
                                 <div>
-                                    <div className="text-xs font-medium text-black dark:text-white">
-                                        {selectedSeniorities.length > 0 ? 'Filtered Employees' : 'All Employees'}
-                                    </div>
-                                    <div className="text-[10px] text-black/40 dark:text-white/40">
-                                        {selectedSeniorities.length > 0
-                                            ? `${selectedSeniorities.length} seniority level${selectedSeniorities.length > 1 ? 's' : ''} selected`
-                                            : 'Names, titles, emails & LinkedIn profiles'
-                                        }
-                                    </div>
+                                    <div className="text-xs font-medium text-black dark:text-white">Employee Contacts</div>
+                                    <div className="text-[10px] text-black/40 dark:text-white/40">Names, titles, emails & LinkedIn profiles</div>
                                 </div>
                             </div>
                             <div className="flex items-center gap-3">
@@ -174,78 +127,12 @@ export function EnrichOptionsModal({ company, companies, open, onOpenChange, onE
                                     <Zap className="size-4 text-cyan-500 dark:text-cyan-400" />
                                 </div>
                                 <div>
-                                    <div className="text-xs font-medium text-black dark:text-white">Select & Convert</div>
-                                    <div className="text-[10px] text-black/40 dark:text-white/40">Choose which employees to add as leads</div>
+                                    <div className="text-xs font-medium text-black dark:text-white">Filter & Convert</div>
+                                    <div className="text-[10px] text-black/40 dark:text-white/40">Browse in People tab, then add to Leads</div>
                                 </div>
                             </div>
                         </div>
                     </div>
-
-                    {/* Advanced Filters Toggle */}
-                    <button
-                        onClick={() => setShowFilters(!showFilters)}
-                        className="flex w-full items-center justify-between rounded-lg border border-black/5 bg-black/[0.02] px-3 py-2 transition-colors hover:bg-black/[0.04] dark:border-white/5 dark:bg-white/[0.02] dark:hover:bg-white/[0.04]"
-                    >
-                        <div className="flex items-center gap-2">
-                            <Filter className="size-3.5 text-black/40 dark:text-white/40" />
-                            <span className="text-xs font-medium text-black/60 dark:text-white/60">
-                                Filter by seniority
-                                {selectedSeniorities.length > 0 && (
-                                    <span className="ml-1.5 rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[10px] text-purple-600 dark:text-purple-400">
-                                        {selectedSeniorities.length}
-                                    </span>
-                                )}
-                            </span>
-                        </div>
-                        <ChevronDown className={cn(
-                            "size-4 text-black/40 transition-transform dark:text-white/40",
-                            showFilters && "rotate-180"
-                        )} />
-                    </button>
-
-                    {/* Seniority Filters */}
-                    {showFilters && (
-                        <div className="rounded-lg border border-black/5 bg-black/[0.02] p-3 dark:border-white/5 dark:bg-white/[0.02]">
-                            <div className="mb-2 flex items-center justify-between">
-                                <span className="text-[10px] text-black/40 dark:text-white/40">
-                                    Leave empty to fetch all employees
-                                </span>
-                                {selectedSeniorities.length > 0 && (
-                                    <button
-                                        onClick={() => setSelectedSeniorities([])}
-                                        className="text-[10px] text-purple-600 hover:text-purple-500 dark:text-purple-400 dark:hover:text-purple-300"
-                                    >
-                                        Clear all
-                                    </button>
-                                )}
-                            </div>
-                            <div className="grid grid-cols-2 gap-1.5">
-                                {seniorityLevels.map((level) => (
-                                    <button
-                                        key={level.id}
-                                        onClick={() => toggleSeniority(level.id)}
-                                        className={cn(
-                                            'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left transition-all',
-                                            selectedSeniorities.includes(level.id)
-                                                ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300'
-                                                : 'text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/5'
-                                        )}>
-                                        <div className={cn(
-                                            'flex size-3.5 items-center justify-center rounded border transition-all',
-                                            selectedSeniorities.includes(level.id)
-                                                ? 'border-purple-500 bg-purple-500'
-                                                : 'border-black/20 dark:border-white/20'
-                                        )}>
-                                            {selectedSeniorities.includes(level.id) && (
-                                                <Check className="size-2 text-white" />
-                                            )}
-                                        </div>
-                                        <span className="text-xs">{level.label}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
                 </div>
 
                 {/* Footer */}
