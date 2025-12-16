@@ -51,6 +51,7 @@ export async function POST(req: Request) {
         // Find and update leads with this Apollo ID in their metadata
         // Using raw SQL to query JSONB field
         // Set phonePending to false and update phone number (if found)
+        const phoneFoundValue = hasPhone ? sql`true::jsonb` : sql`false::jsonb`;
         const result = await db
           .update(leads)
           .set({
@@ -63,10 +64,10 @@ export async function POST(req: Request) {
                   ${JSON.stringify(new Date().toISOString())}::jsonb
                 ),
                 '{phonePending}',
-                'false'::jsonb
+                false::jsonb
               ),
               '{phoneFound}',
-              ${hasPhone ? "'true'" : "'false'"}::jsonb
+              ${phoneFoundValue}
             )`,
             updatedAt: new Date(),
           })
