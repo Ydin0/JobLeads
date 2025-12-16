@@ -16,7 +16,7 @@ export async function POST(req: Request, { params }: RouteContext) {
 
     // Get options from request body
     const body = await req.json().catch(() => ({}));
-    const { findContacts = true, seniorities } = body;
+    const { findContacts = true, seniorities, departments } = body;
 
     // Get the company
     const company = await db.query.companies.findFirst({
@@ -88,6 +88,7 @@ export async function POST(req: Request, { params }: RouteContext) {
           organizationName?: string;
           organizationDomain?: string;
           seniorities?: string[];
+          departments?: string[];
         } = {};
 
         // Use domain from PDL enrichment, or existing company data
@@ -103,6 +104,11 @@ export async function POST(req: Request, { params }: RouteContext) {
         if (seniorities && seniorities.length > 0) {
           searchParams.seniorities = seniorities;
           console.log("[Enrich Company] Filtering by seniorities:", seniorities);
+        }
+
+        if (departments && departments.length > 0) {
+          searchParams.departments = departments;
+          console.log("[Enrich Company] Filtering by departments:", departments);
         }
 
         const people = await searchPeopleAtCompany(searchParams);
