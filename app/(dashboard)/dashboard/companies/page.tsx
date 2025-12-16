@@ -153,8 +153,8 @@ export default function CompaniesPage() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-xl font-semibold text-white">Companies</h1>
-                    <p className="text-sm text-white/40">
+                    <h1 className="text-xl font-semibold text-black dark:text-white">Companies</h1>
+                    <p className="text-sm text-black/40 dark:text-white/40">
                         Companies found from your searches. Enrich to find contacts.
                     </p>
                 </div>
@@ -178,7 +178,7 @@ export default function CompaniesPage() {
                 {stats.map((stat) => (
                     <div
                         key={stat.label}
-                        className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02] p-3 backdrop-blur-sm">
+                        className="relative overflow-hidden rounded-xl border border-black/5 bg-black/[0.02] p-3 backdrop-blur-sm dark:border-white/5 dark:bg-white/[0.02]">
                         <div className="absolute -right-4 -top-4 size-16 rounded-full bg-gradient-to-br opacity-10 blur-xl" />
                         <div className="relative flex items-center gap-3">
                             <div className={cn(
@@ -188,8 +188,8 @@ export default function CompaniesPage() {
                                 <stat.icon className="size-4 text-white" />
                             </div>
                             <div>
-                                <div className="text-2xl font-semibold text-white">{stat.value}</div>
-                                <div className="text-sm text-white/40">{stat.label}</div>
+                                <div className="text-2xl font-semibold text-black dark:text-white">{stat.value}</div>
+                                <div className="text-sm text-black/40 dark:text-white/40">{stat.label}</div>
                             </div>
                         </div>
                     </div>
@@ -200,13 +200,13 @@ export default function CompaniesPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-1 items-center gap-2">
                     <div className="relative max-w-md flex-1">
-                        <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-white/30" />
+                        <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-black/30 dark:text-white/30" />
                         <input
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             placeholder="Search companies..."
-                            className="h-8 w-full rounded-lg border border-white/10 bg-white/5 pl-9 pr-3 text-sm text-white placeholder:text-white/30 focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/10"
+                            className="h-8 w-full rounded-lg border border-black/10 bg-black/5 pl-9 pr-3 text-sm text-black placeholder:text-black/30 focus:border-black/20 focus:outline-none focus:ring-1 focus:ring-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-white/20 dark:focus:ring-white/10"
                         />
                     </div>
                     <div className="flex items-center gap-1">
@@ -221,8 +221,8 @@ export default function CompaniesPage() {
                                 className={cn(
                                     'rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all',
                                     enrichmentFilter === filter.id
-                                        ? 'bg-white/10 text-white'
-                                        : 'text-white/40 hover:bg-white/5 hover:text-white/60'
+                                        ? 'bg-black/10 text-black dark:bg-white/10 dark:text-white'
+                                        : 'text-black/40 hover:bg-black/5 hover:text-black/60 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white/60'
                                 )}>
                                 {filter.label}
                             </button>
@@ -231,7 +231,7 @@ export default function CompaniesPage() {
                 </div>
                 <button
                     onClick={toggleSelectAll}
-                    className="text-xs text-white/40 hover:text-white">
+                    className="text-xs text-black/40 hover:text-black dark:text-white/40 dark:hover:text-white">
                     {selectedCompanies.length === sortedCompanies.length && sortedCompanies.length > 0 ? 'Deselect all' : 'Select all'}
                 </button>
             </div>
@@ -239,18 +239,18 @@ export default function CompaniesPage() {
             {/* Loading State */}
             {isLoading && (
                 <div className="flex items-center justify-center py-12">
-                    <Loader2 className="size-6 animate-spin text-white/40" />
+                    <Loader2 className="size-6 animate-spin text-black/40 dark:text-white/40" />
                 </div>
             )}
 
             {/* Companies Table */}
             {!isLoading && sortedCompanies.length > 0 && (
-                <div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02]">
-                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+                <div className="relative overflow-hidden rounded-xl border border-black/5 bg-black/[0.02] dark:border-white/5 dark:bg-white/[0.02]">
+                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/10 to-transparent dark:via-white/10" />
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead>
-                                <tr className="border-b border-white/5 bg-white/[0.02]">
+                                <tr className="border-b border-black/5 bg-black/[0.02] dark:border-white/5 dark:bg-white/[0.02]">
                                     <th className="px-3 py-2.5 text-left">
                                         <button
                                             onClick={toggleSelectAll}
@@ -258,22 +258,22 @@ export default function CompaniesPage() {
                                                 'flex size-4 items-center justify-center rounded border transition-all',
                                                 selectedCompanies.length === sortedCompanies.length && sortedCompanies.length > 0
                                                     ? 'border-purple-500 bg-purple-500'
-                                                    : 'border-white/20 hover:border-white/40'
+                                                    : 'border-black/20 hover:border-black/40 dark:border-white/20 dark:hover:border-white/40'
                                             )}>
                                             {selectedCompanies.length === sortedCompanies.length && sortedCompanies.length > 0 && (
                                                 <Check className="size-2.5 text-white" />
                                             )}
                                         </button>
                                     </th>
-                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-white/40">Company</th>
-                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-white/40">Jobs</th>
-                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-white/40">Location</th>
-                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-white/40">Size</th>
-                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-white/40">Status</th>
-                                    <th className="px-3 py-2.5 text-right text-xs font-medium text-white/40">Actions</th>
+                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Company</th>
+                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Jobs</th>
+                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Location</th>
+                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Size</th>
+                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Status</th>
+                                    <th className="px-3 py-2.5 text-right text-xs font-medium text-black/40 dark:text-white/40">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-white/5">
+                            <tbody className="divide-y divide-black/5 dark:divide-white/5">
                                 {sortedCompanies.map((company) => {
                                     const metadata = company.metadata as CompanyMetadata | null
                                     const jobCount = metadata?.jobCount || 0
@@ -283,7 +283,7 @@ export default function CompaniesPage() {
                                             key={company.id}
                                             onClick={() => setSelectedCompanyId(company.id)}
                                             className={cn(
-                                                'group cursor-pointer transition-colors hover:bg-white/[0.03]',
+                                                'group cursor-pointer transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.03]',
                                                 selectedCompanies.includes(company.id) && 'bg-purple-500/5'
                                             )}>
                                             <td className="px-3 py-2.5">
@@ -293,7 +293,7 @@ export default function CompaniesPage() {
                                                         'flex size-4 items-center justify-center rounded border transition-all',
                                                         selectedCompanies.includes(company.id)
                                                             ? 'border-purple-500 bg-purple-500'
-                                                            : 'border-white/20 hover:border-white/40'
+                                                            : 'border-black/20 hover:border-black/40 dark:border-white/20 dark:hover:border-white/40'
                                                     )}>
                                                     {selectedCompanies.includes(company.id) && (
                                                         <Check className="size-2.5 text-white" />
@@ -310,13 +310,13 @@ export default function CompaniesPage() {
                                                             className="size-8 rounded-lg object-cover"
                                                         />
                                                     ) : (
-                                                        <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-white/10 to-white/5 text-xs font-bold text-white ring-1 ring-inset ring-white/10">
+                                                        <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-black/10 to-black/5 text-xs font-bold text-black ring-1 ring-inset ring-black/10 dark:from-white/10 dark:to-white/5 dark:text-white dark:ring-white/10">
                                                             {company.name.charAt(0)}
                                                         </div>
                                                     )}
                                                     <div className="min-w-0">
-                                                        <div className="text-sm font-medium text-white">{company.name}</div>
-                                                        <div className="text-xs text-white/30">{company.industry || 'Unknown'}</div>
+                                                        <div className="text-sm font-medium text-black dark:text-white">{company.name}</div>
+                                                        <div className="text-xs text-black/30 dark:text-white/30">{company.industry || 'Unknown'}</div>
                                                     </div>
                                                 </div>
                                             </td>
@@ -326,19 +326,19 @@ export default function CompaniesPage() {
                                                     <span className="rounded-md bg-blue-500/10 px-2 py-0.5 text-xs font-semibold text-blue-400">
                                                         {jobCount}
                                                     </span>
-                                                    <span className="text-[10px] text-white/30">positions</span>
+                                                    <span className="text-[10px] text-black/30 dark:text-white/30">positions</span>
                                                 </div>
                                             </td>
 
                                             <td className="px-3 py-2.5">
-                                                <div className="flex items-center gap-1 text-xs text-white/60">
-                                                    <MapPin className="size-3 text-white/30" />
+                                                <div className="flex items-center gap-1 text-xs text-black/60 dark:text-white/60">
+                                                    <MapPin className="size-3 text-black/30 dark:text-white/30" />
                                                     <span className="max-w-[120px] truncate">{company.location || 'Unknown'}</span>
                                                 </div>
                                             </td>
 
                                             <td className="px-3 py-2.5">
-                                                <span className="text-xs text-white/60">{company.size || '—'}</span>
+                                                <span className="text-xs text-black/60 dark:text-white/60">{company.size || '—'}</span>
                                             </td>
 
                                             <td className="px-3 py-2.5">
@@ -348,7 +348,7 @@ export default function CompaniesPage() {
                                                         Enriched
                                                     </span>
                                                 ) : (
-                                                    <span className="inline-flex items-center gap-1 rounded-full bg-white/5 px-1.5 py-0.5 text-[10px] font-medium text-white/40 ring-1 ring-inset ring-white/10">
+                                                    <span className="inline-flex items-center gap-1 rounded-full bg-black/5 px-1.5 py-0.5 text-[10px] font-medium text-black/40 ring-1 ring-inset ring-black/10 dark:bg-white/5 dark:text-white/40 dark:ring-white/10">
                                                         <Circle className="size-2.5" />
                                                         Pending
                                                     </span>
@@ -362,7 +362,7 @@ export default function CompaniesPage() {
                                                             href={company.linkedinUrl}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="rounded p-1 text-white/30 transition-colors hover:bg-white/10 hover:text-white">
+                                                            className="rounded p-1 text-black/30 transition-colors hover:bg-black/10 hover:text-black dark:text-white/30 dark:hover:bg-white/10 dark:hover:text-white">
                                                             <Linkedin className="size-3.5" />
                                                         </a>
                                                     )}
@@ -371,7 +371,7 @@ export default function CompaniesPage() {
                                                             href={company.websiteUrl}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="rounded p-1 text-white/30 transition-colors hover:bg-white/10 hover:text-white">
+                                                            className="rounded p-1 text-black/30 transition-colors hover:bg-black/10 hover:text-black dark:text-white/30 dark:hover:bg-white/10 dark:hover:text-white">
                                                             <ExternalLink className="size-3.5" />
                                                         </a>
                                                     )}
@@ -414,20 +414,20 @@ export default function CompaniesPage() {
 
             {/* Empty State */}
             {!isLoading && sortedCompanies.length === 0 && (
-                <div className="relative flex flex-col items-center justify-center overflow-hidden rounded-xl border border-white/5 bg-white/[0.02] py-12 text-center">
-                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                    <div className="flex size-10 items-center justify-center rounded-full bg-white/5">
-                        <Building2 className="size-4 text-white/30" />
+                <div className="relative flex flex-col items-center justify-center overflow-hidden rounded-xl border border-black/5 bg-black/[0.02] py-12 text-center dark:border-white/5 dark:bg-white/[0.02]">
+                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/10 to-transparent dark:via-white/10" />
+                    <div className="flex size-10 items-center justify-center rounded-full bg-black/5 dark:bg-white/5">
+                        <Building2 className="size-4 text-black/30 dark:text-white/30" />
                     </div>
-                    <h3 className="mt-3 text-sm font-medium text-white">No companies found</h3>
-                    <p className="mt-1 text-xs text-white/40">
+                    <h3 className="mt-3 text-sm font-medium text-black dark:text-white">No companies found</h3>
+                    <p className="mt-1 text-xs text-black/40 dark:text-white/40">
                         {companies.length === 0
                             ? 'Run a search to find companies with open positions'
                             : 'Try adjusting your search or filter criteria'}
                     </p>
                     {companies.length === 0 && (
                         <Link href="/dashboard/searches">
-                            <Button className="mt-4 h-8 bg-white text-sm text-black hover:bg-white/90">
+                            <Button className="mt-4 h-8 !border-0 !ring-0 bg-gradient-to-r from-orange-500 to-red-500 px-3 text-sm text-white shadow-lg shadow-orange-500/25 hover:from-orange-600 hover:to-red-600 dark:from-purple-500 dark:to-blue-500 dark:shadow-purple-500/25 dark:hover:from-purple-600 dark:hover:to-blue-600">
                                 Go to Searches
                             </Button>
                         </Link>

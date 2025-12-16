@@ -125,7 +125,7 @@ export default function DashboardPage() {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center py-24">
-                <Loader2 className="size-8 animate-spin text-white/40" />
+                <Loader2 className="size-8 animate-spin text-black/40 dark:text-white/40" />
             </div>
         )
     }
@@ -135,10 +135,10 @@ export default function DashboardPage() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-xl font-semibold text-white">Dashboard</h1>
-                    <p className="text-sm text-white/40">Overview of your lead generation activity</p>
+                    <h1 className="text-xl font-semibold text-black dark:text-white">Dashboard</h1>
+                    <p className="text-sm text-black/40 dark:text-white/40">Overview of your lead generation activity</p>
                 </div>
-                <Button size="sm" className="h-8 bg-white text-sm text-black hover:bg-white/90" asChild>
+                <Button size="sm" className="h-8 !border-0 !ring-0 bg-gradient-to-r from-orange-500 to-red-500 px-3 text-sm text-white shadow-lg shadow-orange-500/25 hover:from-orange-600 hover:to-red-600 dark:from-purple-500 dark:to-blue-500 dark:shadow-purple-500/25 dark:hover:from-purple-600 dark:hover:to-blue-600" asChild>
                     <Link href="/dashboard/searches">
                         <Plus className="mr-1.5 size-3.5" />
                         New Search
@@ -151,7 +151,7 @@ export default function DashboardPage() {
                 {stats.map((stat) => (
                     <div
                         key={stat.name}
-                        className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02] p-3 backdrop-blur-sm">
+                        className="relative overflow-hidden rounded-xl border border-black/5 bg-black/[0.02] p-3 backdrop-blur-sm dark:border-white/5 dark:bg-white/[0.02]">
                         <div className="absolute -right-4 -top-4 size-16 rounded-full bg-gradient-to-br opacity-10 blur-xl" />
                         <div className="relative flex items-center gap-3">
                             <div className={cn(
@@ -162,17 +162,17 @@ export default function DashboardPage() {
                             </div>
                             <div className="flex-1">
                                 <div className="flex items-center justify-between">
-                                    <div className="text-2xl font-semibold text-white">{stat.value}</div>
+                                    <div className="text-2xl font-semibold text-black dark:text-white">{stat.value}</div>
                                     <div className="flex items-center gap-0.5 text-xs font-medium">
                                         {stat.changeType === 'positive' && (
                                             <ArrowUpRight className="size-3 text-green-400" />
                                         )}
-                                        <span className={stat.changeType === 'positive' ? 'text-green-400' : 'text-white/40'}>
+                                        <span className={stat.changeType === 'positive' ? 'text-green-400' : 'text-black/40 dark:text-white/40'}>
                                             {stat.change}
                                         </span>
                                     </div>
                                 </div>
-                                <div className="text-sm text-white/40">{stat.name}</div>
+                                <div className="text-sm text-black/40 dark:text-white/40">{stat.name}</div>
                             </div>
                         </div>
                     </div>
@@ -181,14 +181,14 @@ export default function DashboardPage() {
 
             <div className="grid gap-4 lg:grid-cols-3">
                 {/* Recent Companies */}
-                <div className="lg:col-span-2 relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02] backdrop-blur-sm">
+                <div className="lg:col-span-2 relative overflow-hidden rounded-xl border border-black/5 bg-black/[0.02] backdrop-blur-sm dark:border-white/5 dark:bg-white/[0.02]">
                     <div className="absolute -left-20 -top-20 size-40 rounded-full bg-blue-500/5 blur-3xl" />
-                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                    <div className="relative flex items-center justify-between border-b border-white/5 px-4 py-3">
-                        <h2 className="text-sm font-medium text-white">Recent Companies</h2>
+                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/10 to-transparent dark:via-white/10" />
+                    <div className="relative flex items-center justify-between border-b border-black/5 px-4 py-3 dark:border-white/5">
+                        <h2 className="text-sm font-medium text-black dark:text-white">Recent Companies</h2>
                         <Link
                             href="/dashboard/companies"
-                            className="flex items-center gap-1 text-xs text-white/40 transition-colors hover:text-white">
+                            className="flex items-center gap-1 text-xs text-black/40 transition-colors hover:text-black dark:text-white/40 dark:hover:text-white">
                             View all
                             <ExternalLink className="size-3" />
                         </Link>
@@ -203,7 +203,7 @@ export default function DashboardPage() {
                                     return (
                                         <div
                                             key={company.id}
-                                            className="group flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5 transition-all hover:border-white/10 hover:bg-white/[0.04]">
+                                            className="group flex items-center justify-between rounded-lg border border-black/5 bg-black/[0.02] px-3 py-2.5 transition-all hover:border-black/10 hover:bg-black/[0.04] dark:border-white/5 dark:bg-white/[0.02] dark:hover:border-white/10 dark:hover:bg-white/[0.04]">
                                             <div className="flex items-center gap-3">
                                                 {company.logoUrl ? (
                                                     <img
@@ -212,18 +212,18 @@ export default function DashboardPage() {
                                                         className="size-8 rounded-lg object-cover"
                                                     />
                                                 ) : (
-                                                    <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-white/10 to-white/5 text-xs font-medium text-white ring-1 ring-inset ring-white/10">
+                                                    <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-black/10 to-black/5 text-xs font-medium text-black ring-1 ring-inset ring-black/10 dark:from-white/10 dark:to-white/5 dark:text-white dark:ring-white/10">
                                                         {company.name.charAt(0)}
                                                     </div>
                                                 )}
                                                 <div>
                                                     <div className="flex items-center gap-2">
-                                                        <span className="text-sm font-medium text-white">{company.name}</span>
+                                                        <span className="text-sm font-medium text-black dark:text-white">{company.name}</span>
                                                         {company.industry && (
-                                                            <span className="rounded bg-white/10 px-1.5 py-0.5 text-xs text-white/40">{company.industry}</span>
+                                                            <span className="rounded bg-black/10 px-1.5 py-0.5 text-xs text-black/40 dark:bg-white/10 dark:text-white/40">{company.industry}</span>
                                                         )}
                                                     </div>
-                                                    <div className="mt-0.5 flex items-center gap-3 text-xs text-white/30">
+                                                    <div className="mt-0.5 flex items-center gap-3 text-xs text-black/30 dark:text-white/30">
                                                         <span className="flex items-center gap-1">
                                                             <Briefcase className="size-3" />
                                                             {jobCount} jobs
@@ -251,7 +251,7 @@ export default function DashboardPage() {
                                                         Enrich
                                                     </Button>
                                                 )}
-                                                <ChevronRight className="size-4 text-white/20" />
+                                                <ChevronRight className="size-4 text-black/20 dark:text-white/20" />
                                             </div>
                                         </div>
                                     )
@@ -259,25 +259,25 @@ export default function DashboardPage() {
                             </div>
                         ) : (
                             <div className="flex flex-col items-center justify-center py-8 text-center">
-                                <div className="flex size-10 items-center justify-center rounded-full bg-white/5">
-                                    <Building2 className="size-4 text-white/30" />
+                                <div className="flex size-10 items-center justify-center rounded-full bg-black/5 dark:bg-white/5">
+                                    <Building2 className="size-4 text-black/30 dark:text-white/30" />
                                 </div>
-                                <p className="mt-2 text-sm text-white/40">No companies found yet</p>
-                                <p className="text-xs text-white/30">Run a search to discover companies</p>
+                                <p className="mt-2 text-sm text-black/40 dark:text-white/40">No companies found yet</p>
+                                <p className="text-xs text-black/30 dark:text-white/30">Run a search to discover companies</p>
                             </div>
                         )}
                     </div>
                 </div>
 
                 {/* Recent Contacts */}
-                <div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02] backdrop-blur-sm">
+                <div className="relative overflow-hidden rounded-xl border border-black/5 bg-black/[0.02] backdrop-blur-sm dark:border-white/5 dark:bg-white/[0.02]">
                     <div className="absolute -right-20 -top-20 size-40 rounded-full bg-purple-500/5 blur-3xl" />
-                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                    <div className="relative flex items-center justify-between border-b border-white/5 px-4 py-3">
-                        <h2 className="text-sm font-medium text-white">Recent Contacts</h2>
+                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/10 to-transparent dark:via-white/10" />
+                    <div className="relative flex items-center justify-between border-b border-black/5 px-4 py-3 dark:border-white/5">
+                        <h2 className="text-sm font-medium text-black dark:text-white">Recent Contacts</h2>
                         <Link
                             href="/dashboard/leads"
-                            className="flex items-center gap-1 text-xs text-white/40 transition-colors hover:text-white">
+                            className="flex items-center gap-1 text-xs text-black/40 transition-colors hover:text-black dark:text-white/40 dark:hover:text-white">
                             View all
                             <ExternalLink className="size-3" />
                         </Link>
@@ -288,14 +288,14 @@ export default function DashboardPage() {
                                 {recentLeads.map((lead) => (
                                     <div
                                         key={lead.id}
-                                        className="group rounded-lg border border-white/5 bg-white/[0.02] p-2.5 transition-all hover:border-white/10 hover:bg-white/[0.04]">
+                                        className="group rounded-lg border border-black/5 bg-black/[0.02] p-2.5 transition-all hover:border-black/10 hover:bg-black/[0.04] dark:border-white/5 dark:bg-white/[0.02] dark:hover:border-white/10 dark:hover:bg-white/[0.04]">
                                         <div className="flex items-center gap-2.5">
-                                            <div className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-purple-500/20 to-blue-500/20 text-xs font-medium text-white ring-1 ring-inset ring-white/10">
+                                            <div className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-purple-500/20 to-blue-500/20 text-xs font-medium text-black ring-1 ring-inset ring-black/10 dark:text-white dark:ring-white/10">
                                                 {lead.firstName?.charAt(0) || ''}{lead.lastName?.charAt(0) || ''}
                                             </div>
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex items-center gap-1.5">
-                                                    <span className="text-sm font-medium text-white truncate">
+                                                    <span className="text-sm font-medium text-black truncate dark:text-white">
                                                         {lead.firstName} {lead.lastName}
                                                     </span>
                                                     <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ${
@@ -308,15 +308,15 @@ export default function DashboardPage() {
                                                         {lead.status}
                                                     </span>
                                                 </div>
-                                                <div className="text-xs text-white/40 truncate">{lead.jobTitle || 'No title'}</div>
+                                                <div className="text-xs text-black/40 truncate dark:text-white/40">{lead.jobTitle || 'No title'}</div>
                                             </div>
                                         </div>
                                         <div className="mt-2 flex items-center justify-between">
                                             <div className="flex items-center gap-1.5">
-                                                <span className="text-xs text-white/30">{formatDate(lead.createdAt)}</span>
+                                                <span className="text-xs text-black/30 dark:text-white/30">{formatDate(lead.createdAt)}</span>
                                             </div>
                                             <div className="flex items-center gap-1.5">
-                                                {lead.email && <Mail className="size-3.5 text-white/30" />}
+                                                {lead.email && <Mail className="size-3.5 text-black/30 dark:text-white/30" />}
                                                 {lead.linkedinUrl && <Linkedin className="size-3.5 text-blue-400/60" />}
                                             </div>
                                         </div>
@@ -325,16 +325,16 @@ export default function DashboardPage() {
                             </div>
                         ) : (
                             <div className="flex flex-col items-center justify-center py-8 text-center">
-                                <div className="flex size-10 items-center justify-center rounded-full bg-white/5">
-                                    <Users className="size-4 text-white/30" />
+                                <div className="flex size-10 items-center justify-center rounded-full bg-black/5 dark:bg-white/5">
+                                    <Users className="size-4 text-black/30 dark:text-white/30" />
                                 </div>
-                                <p className="mt-2 text-sm text-white/40">No contacts yet</p>
-                                <p className="text-xs text-white/30">Enrich companies to find contacts</p>
+                                <p className="mt-2 text-sm text-black/40 dark:text-white/40">No contacts yet</p>
+                                <p className="text-xs text-black/30 dark:text-white/30">Enrich companies to find contacts</p>
                             </div>
                         )}
                         <Link
                             href="/dashboard/companies"
-                            className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-white/10 py-2.5 text-xs text-white/40 transition-colors hover:border-white/20 hover:text-white/60">
+                            className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-black/10 py-2.5 text-xs text-black/40 transition-colors hover:border-black/20 hover:text-black/60 dark:border-white/10 dark:text-white/40 dark:hover:border-white/20 dark:hover:text-white/60">
                             <Sparkles className="size-3.5" />
                             Enrich companies to find contacts
                         </Link>
@@ -343,14 +343,14 @@ export default function DashboardPage() {
             </div>
 
             {/* Active Searches */}
-            <div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02] backdrop-blur-sm">
+            <div className="relative overflow-hidden rounded-xl border border-black/5 bg-black/[0.02] backdrop-blur-sm dark:border-white/5 dark:bg-white/[0.02]">
                 <div className="absolute -right-32 -top-32 size-64 rounded-full bg-orange-500/5 blur-3xl" />
-                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                <div className="relative flex items-center justify-between border-b border-white/5 px-4 py-3">
-                    <h2 className="text-sm font-medium text-white">Your Searches</h2>
+                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/10 to-transparent dark:via-white/10" />
+                <div className="relative flex items-center justify-between border-b border-black/5 px-4 py-3 dark:border-white/5">
+                    <h2 className="text-sm font-medium text-black dark:text-white">Your Searches</h2>
                     <Link
                         href="/dashboard/searches"
-                        className="flex items-center gap-1 text-xs text-white/40 transition-colors hover:text-white">
+                        className="flex items-center gap-1 text-xs text-black/40 transition-colors hover:text-black dark:text-white/40 dark:hover:text-white">
                         Manage
                         <ExternalLink className="size-3" />
                     </Link>
@@ -364,10 +364,10 @@ export default function DashboardPage() {
                                 return (
                                     <div
                                         key={search.id}
-                                        className="group rounded-lg border border-white/5 bg-white/[0.02] p-3 transition-all hover:border-white/10 hover:bg-white/[0.04]">
+                                        className="group rounded-lg border border-black/5 bg-black/[0.02] p-3 transition-all hover:border-black/10 hover:bg-black/[0.04] dark:border-white/5 dark:bg-white/[0.02] dark:hover:border-white/10 dark:hover:bg-white/[0.04]">
                                         <div className="mb-2 flex items-center justify-between">
                                             <div className="flex items-center gap-1.5">
-                                                <div className="text-sm font-medium text-white truncate">{search.name}</div>
+                                                <div className="text-sm font-medium text-black truncate dark:text-white">{search.name}</div>
                                             </div>
                                             <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ${
                                                 search.status === 'active'
@@ -378,31 +378,31 @@ export default function DashboardPage() {
                                             </span>
                                         </div>
                                         <div className="grid grid-cols-2 gap-1.5">
-                                            <div className="rounded-md bg-white/5 px-2 py-1.5 text-center">
-                                                <div className="text-sm font-medium text-white">{search.resultsCount || 0}</div>
-                                                <div className="text-[10px] text-white/30">Companies</div>
+                                            <div className="rounded-md bg-black/5 px-2 py-1.5 text-center dark:bg-white/5">
+                                                <div className="text-sm font-medium text-black dark:text-white">{search.resultsCount || 0}</div>
+                                                <div className="text-[10px] text-black/30 dark:text-white/30">Companies</div>
                                             </div>
-                                            <div className="rounded-md bg-white/5 px-2 py-1.5 text-center">
-                                                <div className="text-sm font-medium text-white">
+                                            <div className="rounded-md bg-black/5 px-2 py-1.5 text-center dark:bg-white/5">
+                                                <div className="text-sm font-medium text-black dark:text-white">
                                                     {filters?.jobTitles?.length || 0}
                                                 </div>
-                                                <div className="text-[10px] text-white/30">Job Titles</div>
+                                                <div className="text-[10px] text-black/30 dark:text-white/30">Job Titles</div>
                                             </div>
                                         </div>
                                         <div className="mt-2 space-y-0.5">
                                             <div className="flex items-center justify-between text-xs">
-                                                <span className="flex items-center gap-1 text-white/30">
+                                                <span className="flex items-center gap-1 text-black/30 dark:text-white/30">
                                                     <Clock className="size-3" />
                                                     Last run
                                                 </span>
-                                                <span className="text-white/50">{formatDate(search.lastRunAt)}</span>
+                                                <span className="text-black/50 dark:text-white/50">{formatDate(search.lastRunAt)}</span>
                                             </div>
                                             <div className="flex items-center justify-between text-xs">
-                                                <span className="flex items-center gap-1 text-white/30">
+                                                <span className="flex items-center gap-1 text-black/30 dark:text-white/30">
                                                     <Calendar className="size-3" />
                                                     Created
                                                 </span>
-                                                <span className="text-white/50">{formatDate(search.createdAt)}</span>
+                                                <span className="text-black/50 dark:text-white/50">{formatDate(search.createdAt)}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -411,13 +411,13 @@ export default function DashboardPage() {
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center py-8 text-center">
-                            <div className="flex size-10 items-center justify-center rounded-full bg-white/5">
-                                <Search className="size-4 text-white/30" />
+                            <div className="flex size-10 items-center justify-center rounded-full bg-black/5 dark:bg-white/5">
+                                <Search className="size-4 text-black/30 dark:text-white/30" />
                             </div>
-                            <p className="mt-2 text-sm text-white/40">No searches yet</p>
-                            <p className="text-xs text-white/30">Create a search to start finding companies</p>
+                            <p className="mt-2 text-sm text-black/40 dark:text-white/40">No searches yet</p>
+                            <p className="text-xs text-black/30 dark:text-white/30">Create a search to start finding companies</p>
                             <Link href="/dashboard/searches">
-                                <Button className="mt-3 h-8 bg-white text-sm text-black hover:bg-white/90">
+                                <Button className="mt-3 h-8 !border-0 !ring-0 bg-gradient-to-r from-orange-500 to-red-500 px-3 text-sm text-white shadow-lg shadow-orange-500/25 hover:from-orange-600 hover:to-red-600 dark:from-purple-500 dark:to-blue-500 dark:shadow-purple-500/25 dark:hover:from-purple-600 dark:hover:to-blue-600">
                                     <Plus className="mr-1.5 size-3.5" />
                                     Create Search
                                 </Button>
@@ -428,10 +428,10 @@ export default function DashboardPage() {
             </div>
 
             {/* Quick Actions */}
-            <div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02] backdrop-blur-sm">
-                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                <div className="relative border-b border-white/5 px-4 py-3">
-                    <h2 className="text-sm font-medium text-white">Quick Actions</h2>
+            <div className="relative overflow-hidden rounded-xl border border-black/5 bg-black/[0.02] backdrop-blur-sm dark:border-white/5 dark:bg-white/[0.02]">
+                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/10 to-transparent dark:via-white/10" />
+                <div className="relative border-b border-black/5 px-4 py-3 dark:border-white/5">
+                    <h2 className="text-sm font-medium text-black dark:text-white">Quick Actions</h2>
                 </div>
                 <div className="relative p-3">
                     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -444,13 +444,13 @@ export default function DashboardPage() {
                             <Link
                                 key={index}
                                 href={action.href}
-                                className="group relative flex items-center gap-3 overflow-hidden rounded-lg border border-white/5 bg-white/[0.02] p-3 text-left transition-all hover:border-white/10 hover:bg-white/[0.04]">
+                                className="group relative flex items-center gap-3 overflow-hidden rounded-lg border border-black/5 bg-black/[0.02] p-3 text-left transition-all hover:border-black/10 hover:bg-black/[0.04] dark:border-white/5 dark:bg-white/[0.02] dark:hover:border-white/10 dark:hover:bg-white/[0.04]">
                                 <div className={`flex size-10 items-center justify-center rounded-lg bg-gradient-to-br ${action.gradient} shadow-lg transition-transform group-hover:scale-105`}>
                                     <action.icon className="size-5 text-white" />
                                 </div>
                                 <div>
-                                    <div className="text-sm font-medium text-white">{action.title}</div>
-                                    <div className="text-xs text-white/40">{action.desc}</div>
+                                    <div className="text-sm font-medium text-black dark:text-white">{action.title}</div>
+                                    <div className="text-xs text-black/40 dark:text-white/40">{action.desc}</div>
                                 </div>
                             </Link>
                         ))}

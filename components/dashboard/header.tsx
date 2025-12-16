@@ -3,6 +3,7 @@
 import { Bell, Menu, Search, Command } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { UserButton } from '@clerk/nextjs'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 export function DashboardHeader() {
     return (
@@ -33,7 +34,9 @@ export function DashboardHeader() {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                    <ThemeToggle />
+
                     <Button
                         variant="ghost"
                         size="sm"

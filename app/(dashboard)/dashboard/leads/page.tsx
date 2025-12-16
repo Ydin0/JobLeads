@@ -222,8 +222,8 @@ export default function LeadsPage() {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-xl font-semibold text-white">Leads</h1>
-                    <p className="text-sm text-white/40">
+                    <h1 className="text-xl font-semibold text-black dark:text-white">Leads</h1>
+                    <p className="text-sm text-black/40 dark:text-white/40">
                         Contacts found from enriched companies
                     </p>
                 </div>
@@ -241,7 +241,7 @@ export default function LeadsPage() {
                             Enrich {selectedLeads.length} leads
                         </Button>
                         <Button
-                            className="h-8 bg-white text-sm text-black hover:bg-white/90">
+                            className="h-8 bg-black text-sm text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90">
                             <Download className="mr-1.5 size-3.5" />
                             Export
                         </Button>
@@ -254,7 +254,7 @@ export default function LeadsPage() {
                 {stats.map((stat) => (
                     <div
                         key={stat.label}
-                        className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02] p-3 backdrop-blur-sm">
+                        className="relative overflow-hidden rounded-xl border border-black/5 bg-black/[0.02] p-3 backdrop-blur-sm dark:border-white/5 dark:bg-white/[0.02]">
                         <div className="absolute -right-4 -top-4 size-16 rounded-full bg-gradient-to-br opacity-10 blur-xl" />
                         <div className="relative flex items-center gap-3">
                             <div className={cn(
@@ -264,8 +264,8 @@ export default function LeadsPage() {
                                 <stat.icon className="size-4 text-white" />
                             </div>
                             <div>
-                                <div className="text-2xl font-semibold text-white">{stat.value}</div>
-                                <div className="text-sm text-white/40">{stat.label}</div>
+                                <div className="text-2xl font-semibold text-black dark:text-white">{stat.value}</div>
+                                <div className="text-sm text-black/40 dark:text-white/40">{stat.label}</div>
                             </div>
                         </div>
                     </div>
@@ -276,13 +276,13 @@ export default function LeadsPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-1 items-center gap-2">
                     <div className="relative max-w-md flex-1">
-                        <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-white/30" />
+                        <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-black/30 dark:text-white/30" />
                         <input
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             placeholder="Search leads..."
-                            className="h-8 w-full rounded-lg border border-white/10 bg-white/5 pl-9 pr-3 text-sm text-white placeholder:text-white/30 focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/10"
+                            className="h-8 w-full rounded-lg border border-black/10 bg-black/5 pl-9 pr-3 text-sm text-black placeholder:text-black/30 focus:border-black/20 focus:outline-none focus:ring-1 focus:ring-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-white/20 dark:focus:ring-white/10"
                         />
                     </div>
                     <div className="flex items-center gap-1">
@@ -298,8 +298,8 @@ export default function LeadsPage() {
                                 className={cn(
                                     'rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all',
                                     statusFilter === filter.id
-                                        ? 'bg-white/10 text-white'
-                                        : 'text-white/40 hover:bg-white/5 hover:text-white/60'
+                                        ? 'bg-black/10 text-black dark:bg-white/10 dark:text-white'
+                                        : 'text-black/40 hover:bg-black/5 hover:text-black/60 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white/60'
                                 )}>
                                 {filter.label}
                             </button>
@@ -311,7 +311,7 @@ export default function LeadsPage() {
                             'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all',
                             showFilters || activeFilterCount > 0
                                 ? 'bg-purple-500/20 text-purple-400'
-                                : 'text-white/40 hover:bg-white/5 hover:text-white/60'
+                                : 'text-black/40 hover:bg-black/5 hover:text-black/60 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white/60'
                         )}>
                         <Filter className="size-3" />
                         Filters
@@ -326,13 +326,13 @@ export default function LeadsPage() {
 
             {/* Advanced Filters Panel */}
             {showFilters && (
-                <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+                <div className="rounded-xl border border-black/5 bg-black/[0.02] p-4 dark:border-white/5 dark:bg-white/[0.02]">
                     <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-medium text-white">Advanced Filters</h3>
+                        <h3 className="text-sm font-medium text-black dark:text-white">Advanced Filters</h3>
                         {activeFilterCount > 0 && (
                             <button
                                 onClick={() => setAdvancedFilters(defaultFilters)}
-                                className="text-xs text-white/40 hover:text-white/60 flex items-center gap-1">
+                                className="text-xs text-black/40 hover:text-black/60 dark:text-white/40 dark:hover:text-white/60 flex items-center gap-1">
                                 <X className="size-3" />
                                 Clear all
                             </button>
@@ -340,49 +340,49 @@ export default function LeadsPage() {
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                         <div>
-                            <label className="block text-xs text-white/40 mb-1.5">Country</label>
+                            <label className="block text-xs text-black/40 dark:text-white/40 mb-1.5">Country</label>
                             <select
                                 value={advancedFilters.country}
                                 onChange={(e) => setAdvancedFilters(prev => ({ ...prev, country: e.target.value }))}
-                                className="h-8 w-full rounded-lg border border-white/10 bg-white/5 px-2.5 text-xs text-white focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/10">
-                                <option value="" className="bg-[#0a0a0f]">All countries</option>
+                                className="h-8 w-full rounded-lg border border-black/10 bg-black/5 px-2.5 text-xs text-black focus:border-black/20 focus:outline-none focus:ring-1 focus:ring-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-white/20 dark:focus:ring-white/10">
+                                <option value="" className="bg-white dark:bg-[#0a0a0f]">All countries</option>
                                 {filterOptions.countries.map(country => (
-                                    <option key={country} value={country} className="bg-[#0a0a0f]">{country}</option>
+                                    <option key={country} value={country} className="bg-white dark:bg-[#0a0a0f]">{country}</option>
                                 ))}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs text-white/40 mb-1.5">Company</label>
+                            <label className="block text-xs text-black/40 dark:text-white/40 mb-1.5">Company</label>
                             <select
                                 value={advancedFilters.company}
                                 onChange={(e) => setAdvancedFilters(prev => ({ ...prev, company: e.target.value }))}
-                                className="h-8 w-full rounded-lg border border-white/10 bg-white/5 px-2.5 text-xs text-white focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/10">
-                                <option value="" className="bg-[#0a0a0f]">All companies</option>
+                                className="h-8 w-full rounded-lg border border-black/10 bg-black/5 px-2.5 text-xs text-black focus:border-black/20 focus:outline-none focus:ring-1 focus:ring-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-white/20 dark:focus:ring-white/10">
+                                <option value="" className="bg-white dark:bg-[#0a0a0f]">All companies</option>
                                 {filterOptions.companies.map(company => (
-                                    <option key={company} value={company} className="bg-[#0a0a0f]">{company}</option>
+                                    <option key={company} value={company} className="bg-white dark:bg-[#0a0a0f]">{company}</option>
                                 ))}
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs text-white/40 mb-1.5">Has Phone</label>
+                            <label className="block text-xs text-black/40 dark:text-white/40 mb-1.5">Has Phone</label>
                             <select
                                 value={advancedFilters.hasPhone}
                                 onChange={(e) => setAdvancedFilters(prev => ({ ...prev, hasPhone: e.target.value as 'all' | 'yes' | 'no' }))}
-                                className="h-8 w-full rounded-lg border border-white/10 bg-white/5 px-2.5 text-xs text-white focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/10">
-                                <option value="all" className="bg-[#0a0a0f]">All</option>
-                                <option value="yes" className="bg-[#0a0a0f]">With phone</option>
-                                <option value="no" className="bg-[#0a0a0f]">Without phone</option>
+                                className="h-8 w-full rounded-lg border border-black/10 bg-black/5 px-2.5 text-xs text-black focus:border-black/20 focus:outline-none focus:ring-1 focus:ring-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-white/20 dark:focus:ring-white/10">
+                                <option value="all" className="bg-white dark:bg-[#0a0a0f]">All</option>
+                                <option value="yes" className="bg-white dark:bg-[#0a0a0f]">With phone</option>
+                                <option value="no" className="bg-white dark:bg-[#0a0a0f]">Without phone</option>
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs text-white/40 mb-1.5">Has Email</label>
+                            <label className="block text-xs text-black/40 dark:text-white/40 mb-1.5">Has Email</label>
                             <select
                                 value={advancedFilters.hasEmail}
                                 onChange={(e) => setAdvancedFilters(prev => ({ ...prev, hasEmail: e.target.value as 'all' | 'yes' | 'no' }))}
-                                className="h-8 w-full rounded-lg border border-white/10 bg-white/5 px-2.5 text-xs text-white focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/10">
-                                <option value="all" className="bg-[#0a0a0f]">All</option>
-                                <option value="yes" className="bg-[#0a0a0f]">With email</option>
-                                <option value="no" className="bg-[#0a0a0f]">Without email</option>
+                                className="h-8 w-full rounded-lg border border-black/10 bg-black/5 px-2.5 text-xs text-black focus:border-black/20 focus:outline-none focus:ring-1 focus:ring-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-white/20 dark:focus:ring-white/10">
+                                <option value="all" className="bg-white dark:bg-[#0a0a0f]">All</option>
+                                <option value="yes" className="bg-white dark:bg-[#0a0a0f]">With email</option>
+                                <option value="no" className="bg-white dark:bg-[#0a0a0f]">Without email</option>
                             </select>
                         </div>
                     </div>
@@ -392,18 +392,18 @@ export default function LeadsPage() {
             {/* Loading State */}
             {isLoading && (
                 <div className="flex items-center justify-center py-12">
-                    <Loader2 className="size-6 animate-spin text-white/40" />
+                    <Loader2 className="size-6 animate-spin text-black/40 dark:text-white/40" />
                 </div>
             )}
 
             {/* Leads Table */}
             {!isLoading && paginatedLeads.length > 0 && (
-                <div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02]">
-                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+                <div className="relative overflow-hidden rounded-xl border border-black/5 bg-black/[0.02] dark:border-white/5 dark:bg-white/[0.02]">
+                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/10 to-transparent dark:via-white/10" />
                     <div className="overflow-x-auto">
                         <table className="w-full table-fixed">
                             <thead>
-                                <tr className="border-b border-white/5 bg-white/[0.02]">
+                                <tr className="border-b border-black/5 bg-black/[0.02] dark:border-white/5 dark:bg-white/[0.02]">
                                     <th className="w-10 px-3 py-2.5 text-left">
                                         <button
                                             onClick={toggleSelectAll}
@@ -411,23 +411,23 @@ export default function LeadsPage() {
                                                 'flex size-4 items-center justify-center rounded border transition-all',
                                                 selectedLeads.length === paginatedLeads.length && paginatedLeads.length > 0
                                                     ? 'border-purple-500 bg-purple-500'
-                                                    : 'border-white/20 hover:border-white/40'
+                                                    : 'border-black/20 hover:border-black/40 dark:border-white/20 dark:hover:border-white/40'
                                             )}>
                                             {selectedLeads.length === paginatedLeads.length && paginatedLeads.length > 0 && (
                                                 <Check className="size-2.5 text-white" />
                                             )}
                                         </button>
                                     </th>
-                                    <th className="w-[180px] px-3 py-2.5 text-left text-xs font-medium text-white/40">Contact</th>
-                                    <th className="w-[140px] px-3 py-2.5 text-left text-xs font-medium text-white/40">Company</th>
-                                    <th className="w-[140px] px-3 py-2.5 text-left text-xs font-medium text-white/40">Title</th>
-                                    <th className="w-[180px] px-3 py-2.5 text-left text-xs font-medium text-white/40">Email</th>
-                                    <th className="w-[130px] px-3 py-2.5 text-left text-xs font-medium text-white/40">Phone</th>
-                                    <th className="w-[100px] px-3 py-2.5 text-left text-xs font-medium text-white/40">Status</th>
-                                    <th className="w-[130px] px-3 py-2.5 text-right text-xs font-medium text-white/40">Actions</th>
+                                    <th className="w-[180px] px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Contact</th>
+                                    <th className="w-[140px] px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Company</th>
+                                    <th className="w-[140px] px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Title</th>
+                                    <th className="w-[180px] px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Email</th>
+                                    <th className="w-[130px] px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Phone</th>
+                                    <th className="w-[100px] px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Status</th>
+                                    <th className="w-[130px] px-3 py-2.5 text-right text-xs font-medium text-black/40 dark:text-white/40">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-white/5">
+                            <tbody className="divide-y divide-black/5 dark:divide-white/5">
                                 {paginatedLeads.map((lead) => {
                                     const status = statusConfig[lead.status as keyof typeof statusConfig] || statusConfig.new
 
@@ -435,7 +435,7 @@ export default function LeadsPage() {
                                         <tr
                                             key={lead.id}
                                             className={cn(
-                                                'group transition-colors hover:bg-white/[0.03]',
+                                                'group transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.03]',
                                                 selectedLeads.includes(lead.id) && 'bg-purple-500/5'
                                             )}>
                                             <td className="px-3 py-2.5">
@@ -445,7 +445,7 @@ export default function LeadsPage() {
                                                         'flex size-4 items-center justify-center rounded border transition-all',
                                                         selectedLeads.includes(lead.id)
                                                             ? 'border-purple-500 bg-purple-500'
-                                                            : 'border-white/20 hover:border-white/40'
+                                                            : 'border-black/20 hover:border-black/40 dark:border-white/20 dark:hover:border-white/40'
                                                     )}>
                                                     {selectedLeads.includes(lead.id) && (
                                                         <Check className="size-2.5 text-white" />
@@ -459,10 +459,10 @@ export default function LeadsPage() {
                                                         {lead.firstName.charAt(0)}{lead.lastName.charAt(0)}
                                                     </div>
                                                     <div className="min-w-0 overflow-hidden">
-                                                        <div className="truncate text-sm font-medium text-white">
+                                                        <div className="truncate text-sm font-medium text-black dark:text-white">
                                                             {lead.firstName} {lead.lastName}
                                                         </div>
-                                                        <div className="truncate text-xs text-white/30">{lead.location || '—'}</div>
+                                                        <div className="truncate text-xs text-black/30 dark:text-white/30">{lead.location || '—'}</div>
                                                     </div>
                                                 </div>
                                             </td>
@@ -477,33 +477,33 @@ export default function LeadsPage() {
                                                                 className="size-5 shrink-0 rounded object-cover"
                                                             />
                                                         ) : (
-                                                            <div className="flex size-5 shrink-0 items-center justify-center rounded bg-white/10 text-[10px] font-medium text-white">
+                                                            <div className="flex size-5 shrink-0 items-center justify-center rounded bg-black/10 text-[10px] font-medium text-black dark:bg-white/10 dark:text-white">
                                                                 {lead.company.name.charAt(0)}
                                                             </div>
                                                         )}
-                                                        <span className="truncate text-xs text-white/60">{lead.company.name}</span>
+                                                        <span className="truncate text-xs text-black/60 dark:text-white/60">{lead.company.name}</span>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-xs text-white/30">—</span>
+                                                    <span className="text-xs text-black/30 dark:text-white/30">—</span>
                                                 )}
                                             </td>
 
                                             <td className="px-3 py-2.5">
-                                                <span className="block truncate text-xs text-white/60">{lead.jobTitle || '—'}</span>
+                                                <span className="block truncate text-xs text-black/60 dark:text-white/60">{lead.jobTitle || '—'}</span>
                                             </td>
 
                                             <td className="px-3 py-2.5">
                                                 {lead.email ? (
                                                     <div className="flex items-center gap-1 overflow-hidden">
-                                                        <span className="truncate text-xs text-white/60">{lead.email}</span>
+                                                        <span className="truncate text-xs text-black/60 dark:text-white/60">{lead.email}</span>
                                                         <button
                                                             onClick={() => copyEmail(lead.email!)}
-                                                            className="shrink-0 rounded p-0.5 text-white/20 transition-colors hover:bg-white/10 hover:text-white">
+                                                            className="shrink-0 rounded p-0.5 text-black/20 transition-colors hover:bg-black/10 hover:text-black dark:text-white/20 dark:hover:bg-white/10 dark:hover:text-white">
                                                             <Copy className="size-3" />
                                                         </button>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-xs text-white/30">—</span>
+                                                    <span className="text-xs text-black/30 dark:text-white/30">—</span>
                                                 )}
                                             </td>
 
@@ -517,10 +517,10 @@ export default function LeadsPage() {
                                                     if (lead.phone) {
                                                         return (
                                                             <div className="flex items-center gap-1">
-                                                                <span className="text-xs text-white/60">{lead.phone}</span>
+                                                                <span className="text-xs text-black/60 dark:text-white/60">{lead.phone}</span>
                                                                 <button
                                                                     onClick={() => navigator.clipboard.writeText(lead.phone!)}
-                                                                    className="rounded p-0.5 text-white/20 transition-colors hover:bg-white/10 hover:text-white">
+                                                                    className="rounded p-0.5 text-black/20 transition-colors hover:bg-black/10 hover:text-black dark:text-white/20 dark:hover:bg-white/10 dark:hover:text-white">
                                                                     <Copy className="size-3" />
                                                                 </button>
                                                             </div>
@@ -538,11 +538,11 @@ export default function LeadsPage() {
 
                                                     if (phoneRevealed && !phoneFound) {
                                                         return (
-                                                            <span className="text-xs text-white/40">No number</span>
+                                                            <span className="text-xs text-black/40 dark:text-white/40">No number</span>
                                                         )
                                                     }
 
-                                                    return <span className="text-xs text-white/30">—</span>
+                                                    return <span className="text-xs text-black/30 dark:text-white/30">—</span>
                                                 })()}
                                             </td>
 
@@ -554,10 +554,10 @@ export default function LeadsPage() {
                                                         'rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset cursor-pointer bg-transparent',
                                                         status.color
                                                     )}>
-                                                    <option value="new" className="bg-[#0a0a0f]">New</option>
-                                                    <option value="contacted" className="bg-[#0a0a0f]">Contacted</option>
-                                                    <option value="qualified" className="bg-[#0a0a0f]">Qualified</option>
-                                                    <option value="rejected" className="bg-[#0a0a0f]">Rejected</option>
+                                                    <option value="new" className="bg-white dark:bg-[#0a0a0f]">New</option>
+                                                    <option value="contacted" className="bg-white dark:bg-[#0a0a0f]">Contacted</option>
+                                                    <option value="qualified" className="bg-white dark:bg-[#0a0a0f]">Qualified</option>
+                                                    <option value="rejected" className="bg-white dark:bg-[#0a0a0f]">Rejected</option>
                                                 </select>
                                             </td>
 
@@ -568,21 +568,21 @@ export default function LeadsPage() {
                                                             href={lead.linkedinUrl}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="rounded p-1 text-white/30 transition-colors hover:bg-white/10 hover:text-white">
+                                                            className="rounded p-1 text-black/30 transition-colors hover:bg-black/10 hover:text-black dark:text-white/30 dark:hover:bg-white/10 dark:hover:text-white">
                                                             <Linkedin className="size-3.5" />
                                                         </a>
                                                     )}
                                                     {lead.email && (
                                                         <a
                                                             href={`mailto:${lead.email}`}
-                                                            className="rounded p-1 text-white/30 transition-colors hover:bg-white/10 hover:text-white">
+                                                            className="rounded p-1 text-black/30 transition-colors hover:bg-black/10 hover:text-black dark:text-white/30 dark:hover:bg-white/10 dark:hover:text-white">
                                                             <Mail className="size-3.5" />
                                                         </a>
                                                     )}
                                                     {lead.phone && (
                                                         <a
                                                             href={`tel:${lead.phone}`}
-                                                            className="rounded p-1 text-white/30 transition-colors hover:bg-white/10 hover:text-white">
+                                                            className="rounded p-1 text-black/30 transition-colors hover:bg-black/10 hover:text-black dark:text-white/30 dark:hover:bg-white/10 dark:hover:text-white">
                                                             <Phone className="size-3.5" />
                                                         </a>
                                                     )}
@@ -611,8 +611,8 @@ export default function LeadsPage() {
 
                     {/* Pagination */}
                     {totalPages > 1 && (
-                        <div className="flex items-center justify-between border-t border-white/5 bg-white/[0.01] px-4 py-2">
-                            <div className="text-xs text-white/40">
+                        <div className="flex items-center justify-between border-t border-black/5 bg-black/[0.01] px-4 py-2 dark:border-white/5 dark:bg-white/[0.01]">
+                            <div className="text-xs text-black/40 dark:text-white/40">
                                 Showing {((currentPage - 1) * leadsPerPage) + 1} to {Math.min(currentPage * leadsPerPage, filteredLeads.length)} of {filteredLeads.length}
                             </div>
                             <div className="flex items-center gap-1">
@@ -621,10 +621,10 @@ export default function LeadsPage() {
                                     size="sm"
                                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                     disabled={currentPage === 1}
-                                    className="h-7 w-7 p-0 text-white/40 hover:bg-white/10 hover:text-white disabled:opacity-30">
+                                    className="h-7 w-7 p-0 text-black/40 hover:bg-black/10 hover:text-black disabled:opacity-30 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white">
                                     <ChevronLeft className="size-4" />
                                 </Button>
-                                <span className="px-2 text-xs text-white/60">
+                                <span className="px-2 text-xs text-black/60 dark:text-white/60">
                                     {currentPage} / {totalPages}
                                 </span>
                                 <Button
@@ -632,7 +632,7 @@ export default function LeadsPage() {
                                     size="sm"
                                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                                     disabled={currentPage === totalPages}
-                                    className="h-7 w-7 p-0 text-white/40 hover:bg-white/10 hover:text-white disabled:opacity-30">
+                                    className="h-7 w-7 p-0 text-black/40 hover:bg-black/10 hover:text-black disabled:opacity-30 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white">
                                     <ChevronRight className="size-4" />
                                 </Button>
                             </div>
@@ -643,20 +643,20 @@ export default function LeadsPage() {
 
             {/* Empty State */}
             {!isLoading && filteredLeads.length === 0 && (
-                <div className="relative flex flex-col items-center justify-center overflow-hidden rounded-xl border border-white/5 bg-white/[0.02] py-12 text-center">
-                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                    <div className="flex size-10 items-center justify-center rounded-full bg-white/5">
-                        <Users className="size-4 text-white/30" />
+                <div className="relative flex flex-col items-center justify-center overflow-hidden rounded-xl border border-black/5 bg-black/[0.02] py-12 text-center dark:border-white/5 dark:bg-white/[0.02]">
+                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/10 to-transparent dark:via-white/10" />
+                    <div className="flex size-10 items-center justify-center rounded-full bg-black/5 dark:bg-white/5">
+                        <Users className="size-4 text-black/30 dark:text-white/30" />
                     </div>
-                    <h3 className="mt-3 text-sm font-medium text-white">No leads yet</h3>
-                    <p className="mt-1 max-w-sm text-xs text-white/40">
+                    <h3 className="mt-3 text-sm font-medium text-black dark:text-white">No leads yet</h3>
+                    <p className="mt-1 max-w-sm text-xs text-black/40 dark:text-white/40">
                         {leads.length === 0
                             ? 'Enrich companies to find contact leads'
                             : 'Try adjusting your search or filter criteria'}
                     </p>
                     {leads.length === 0 && (
                         <Link href="/dashboard/companies">
-                            <Button className="mt-4 h-8 bg-white text-sm text-black hover:bg-white/90">
+                            <Button className="mt-4 h-8 !border-0 !ring-0 bg-gradient-to-r from-orange-500 to-red-500 px-3 text-sm text-white shadow-lg shadow-orange-500/25 hover:from-orange-600 hover:to-red-600 dark:from-purple-500 dark:to-blue-500 dark:shadow-purple-500/25 dark:hover:from-purple-600 dark:hover:to-blue-600">
                                 <Building2 className="mr-1.5 size-3.5" />
                                 Go to Companies
                             </Button>
