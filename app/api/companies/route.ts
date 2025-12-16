@@ -20,7 +20,7 @@ export async function GET(req: Request) {
       .from(companies)
       .where(eq(companies.orgId, orgId));
 
-    // Get companies with employees count
+    // Get companies with employees count and jobs
     const results = await db.query.companies.findMany({
       where: eq(companies.orgId, orgId),
       orderBy: [desc(companies.createdAt)],
@@ -30,20 +30,64 @@ export async function GET(req: Request) {
         search: true,
         employees: true,
         leads: true,
+        jobs: true,
       },
     });
 
-    // Transform to include employeesCount and leadsCount
-    const companiesWithCounts = results.map((company) => ({
-      ...company,
-      employeesCount: company.employees?.length || 0,
-      leadsCount: company.leads?.length || 0,
-      employees: undefined, // Remove arrays to keep response small
-      leads: undefined,
-    }));
+    // Calculate date 30 days ago for hiring velocity
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    // Transform to include counts and hiring signals
+    const companiesWithSignals = results.map((company) => {
+      const jobs = company.jobs || [];
+      const recentJobs = jobs.filter(
+        job => job.publishedAt && new Date(job.publishedAt) >= thirtyDaysAgo
+      );
+
+      // Count jobs by department
+      const departmentCounts: Record<string, number> = {};
+      for (const job of jobs) {
+        const dept = job.department || "other";
+        departmentCounts[dept] = (departmentCounts[dept] || 0) + 1;
+      }
+
+      // Aggregate tech stack mentions (top 5)
+      const techCounts: Record<string, number> = {};
+      for (const job of jobs) {
+        const techStack = job.techStack as string[] | null;
+        if (techStack) {
+          for (const tech of techStack) {
+            techCounts[tech] = (techCounts[tech] || 0) + 1;
+          }
+        }
+      }
+      const topTech = Object.entries(techCounts)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 5)
+        .map(([tech]) => tech);
+
+      return {
+        ...company,
+        employeesCount: company.employees?.length || 0,
+        leadsCount: company.leads?.length || 0,
+        // Hiring signals
+        hiringSignals: {
+          totalJobs: jobs.length,
+          recentJobs: recentJobs.length,
+          departmentBreakdown: departmentCounts,
+          topTech,
+          hiringIntensity: Math.min(100, recentJobs.length * 10),
+        },
+        // Remove arrays to keep response small
+        employees: undefined,
+        leads: undefined,
+        jobs: undefined,
+      };
+    });
 
     return NextResponse.json({
-      companies: companiesWithCounts,
+      companies: companiesWithSignals,
       pagination: {
         page,
         limit,

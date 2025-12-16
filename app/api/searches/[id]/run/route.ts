@@ -8,6 +8,7 @@ import {
   extractCompaniesFromJobs,
   LinkedInJobsInput,
 } from "@/lib/apify";
+import { categorizeJob, extractTechStack } from "@/lib/job-analysis";
 
 // Helper to parse full name into first and last name
 function parseFullName(fullName: string): { firstName: string; lastName: string } {
@@ -110,6 +111,10 @@ export async function POST(req: Request, { params }: RouteContext) {
       if (!companyId) continue;
 
       try {
+        // Categorize job and extract tech stack
+        const department = categorizeJob(job.title);
+        const techStack = extractTechStack(job.description);
+
         await db.insert(jobs).values({
           orgId,
           companyId,
@@ -123,6 +128,8 @@ export async function POST(req: Request, { params }: RouteContext) {
           experienceLevel: job.experienceLevel,
           workType: job.workType,
           sector: job.sector,
+          department,
+          techStack,
           description: job.description,
           postedTime: job.postedTime,
           publishedAt: job.publishedAt ? new Date(job.publishedAt) : null,

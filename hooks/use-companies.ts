@@ -4,9 +4,18 @@ import { useState, useEffect, useCallback } from 'react'
 import type { Company } from '@/lib/db/schema'
 import { onSearchCompleted, onDataRefresh } from '@/lib/events'
 
+export interface HiringSignals {
+  totalJobs: number
+  recentJobs: number
+  departmentBreakdown: Record<string, number>
+  topTech: string[]
+  hiringIntensity: number
+}
+
 export interface CompanyWithCounts extends Company {
   employeesCount: number
   leadsCount: number
+  hiringSignals?: HiringSignals
 }
 
 export interface PaginationInfo {

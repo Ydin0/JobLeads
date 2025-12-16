@@ -112,6 +112,21 @@ export const companies = pgTable("companies", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+// Job department categories
+export const jobDepartmentEnum = pgEnum("job_department", [
+  "engineering",
+  "sales",
+  "marketing",
+  "hr",
+  "finance",
+  "operations",
+  "design",
+  "product",
+  "customer_success",
+  "legal",
+  "other",
+]);
+
 // Jobs table - raw job postings from searches
 export const jobs = pgTable("jobs", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -127,6 +142,8 @@ export const jobs = pgTable("jobs", {
   experienceLevel: varchar("experience_level", { length: 100 }),
   workType: varchar("work_type", { length: 100 }),
   sector: varchar("sector", { length: 255 }),
+  department: jobDepartmentEnum("department"), // Categorized department
+  techStack: jsonb("tech_stack").$type<string[]>(), // Extracted technologies
   description: text("description"),
   postedTime: varchar("posted_time", { length: 100 }),
   publishedAt: timestamp("published_at", { withTimezone: true }),

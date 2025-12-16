@@ -18,6 +18,8 @@ import {
     ChevronLeft,
     ChevronRight,
     UserPlus,
+    TrendingUp,
+    Code,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useCompanies } from '@/hooks/use-companies'
@@ -95,17 +97,14 @@ export default function CompaniesPage() {
         },
         {
             label: 'Total Jobs',
-            value: companies.reduce((acc, c) => {
-                const metadata = c.metadata as CompanyMetadata | null
-                return acc + (metadata?.jobCount || 0)
-            }, 0),
+            value: companies.reduce((acc, c) => acc + (c.hiringSignals?.totalJobs || 0), 0),
             icon: Briefcase,
             color: 'from-purple-500 to-pink-500',
         },
         {
-            label: 'Total Employees',
-            value: companies.reduce((acc, c) => acc + ((c as unknown as { employeesCount: number }).employeesCount || 0), 0),
-            icon: UserPlus,
+            label: 'Actively Hiring',
+            value: companies.filter(c => (c.hiringSignals?.recentJobs || 0) > 0).length,
+            icon: TrendingUp,
             color: 'from-green-500 to-emerald-500',
         },
         {
@@ -128,9 +127,13 @@ export default function CompaniesPage() {
     })
 
     const sortedCompanies = [...filteredCompanies].sort((a, b) => {
-        const aJobs = (a.metadata as CompanyMetadata | null)?.jobCount || 0
-        const bJobs = (b.metadata as CompanyMetadata | null)?.jobCount || 0
-        return bJobs - aJobs
+        // Sort by hiring velocity (recent jobs) first, then total jobs
+        const aRecent = a.hiringSignals?.recentJobs || 0
+        const bRecent = b.hiringSignals?.recentJobs || 0
+        if (aRecent !== bRecent) return bRecent - aRecent
+        const aTotal = a.hiringSignals?.totalJobs || 0
+        const bTotal = b.hiringSignals?.totalJobs || 0
+        return bTotal - aTotal
     })
 
     const toggleSelectCompany = (id: string) => {
@@ -265,18 +268,27 @@ export default function CompaniesPage() {
                                         </button>
                                     </th>
                                     <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Company</th>
-                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Jobs</th>
-                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Employees</th>
-                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Location</th>
-                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Size</th>
+                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Hiring</th>
+                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Departments</th>
+                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Tech Stack</th>
+                                    <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Contacts</th>
                                     <th className="px-3 py-2.5 text-left text-xs font-medium text-black/40 dark:text-white/40">Status</th>
                                     <th className="px-3 py-2.5 text-right text-xs font-medium text-black/40 dark:text-white/40">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-black/5 dark:divide-white/5">
                                 {sortedCompanies.map((company) => {
-                                    const metadata = company.metadata as CompanyMetadata | null
-                                    const jobCount = metadata?.jobCount || 0
+                                    const signals = company.hiringSignals
+                                    const totalJobs = signals?.totalJobs || 0
+                                    const recentJobs = signals?.recentJobs || 0
+                                    const departments = signals?.departmentBreakdown || {}
+                                    const topTech = signals?.topTech || []
+
+                                    // Get top 3 departments
+                                    const topDepts = Object.entries(departments)
+                                        .filter(([dept]) => dept !== 'other')
+                                        .sort(([,a], [,b]) => b - a)
+                                        .slice(0, 3)
 
                                     return (
                                         <tr
@@ -321,38 +333,88 @@ export default function CompaniesPage() {
                                                 </div>
                                             </td>
 
+                                            {/* Hiring column */}
                                             <td className="px-3 py-2.5">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="rounded-md bg-blue-500/10 px-2 py-0.5 text-xs font-semibold text-blue-400">
-                                                        {jobCount}
-                                                    </span>
-                                                    <span className="text-[10px] text-black/30 dark:text-white/30">positions</span>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className={cn(
+                                                            "rounded-md px-2 py-0.5 text-xs font-semibold",
+                                                            recentJobs > 0
+                                                                ? "bg-green-500/10 text-green-400"
+                                                                : "bg-black/5 text-black/30 dark:bg-white/5 dark:text-white/30"
+                                                        )}>
+                                                            {totalJobs}
+                                                        </span>
+                                                        <span className="text-[10px] text-black/30 dark:text-white/30">jobs</span>
+                                                    </div>
+                                                    {recentJobs > 0 && (
+                                                        <span className="flex items-center gap-0.5 text-[10px] text-green-400">
+                                                            <TrendingUp className="size-2.5" />
+                                                            {recentJobs} new
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </td>
 
+                                            {/* Departments column */}
+                                            <td className="px-3 py-2.5">
+                                                <div className="flex flex-wrap gap-1">
+                                                    {topDepts.length > 0 ? topDepts.map(([dept, count]) => (
+                                                        <span
+                                                            key={dept}
+                                                            className={cn(
+                                                                "rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset",
+                                                                dept === 'engineering' && "bg-blue-500/10 text-blue-400 ring-blue-500/20",
+                                                                dept === 'sales' && "bg-green-500/10 text-green-400 ring-green-500/20",
+                                                                dept === 'marketing' && "bg-purple-500/10 text-purple-400 ring-purple-500/20",
+                                                                dept === 'hr' && "bg-pink-500/10 text-pink-400 ring-pink-500/20",
+                                                                dept === 'product' && "bg-cyan-500/10 text-cyan-400 ring-cyan-500/20",
+                                                                dept === 'design' && "bg-indigo-500/10 text-indigo-400 ring-indigo-500/20",
+                                                                dept === 'finance' && "bg-yellow-500/10 text-yellow-400 ring-yellow-500/20",
+                                                                dept === 'operations' && "bg-orange-500/10 text-orange-400 ring-orange-500/20",
+                                                                !['engineering', 'sales', 'marketing', 'hr', 'product', 'design', 'finance', 'operations'].includes(dept) && "bg-gray-500/10 text-gray-400 ring-gray-500/20"
+                                                            )}
+                                                        >
+                                                            {dept.charAt(0).toUpperCase() + dept.slice(1).replace('_', ' ')} ({count})
+                                                        </span>
+                                                    )) : (
+                                                        <span className="text-[10px] text-black/30 dark:text-white/30">—</span>
+                                                    )}
+                                                </div>
+                                            </td>
+
+                                            {/* Tech Stack column */}
+                                            <td className="px-3 py-2.5">
+                                                <div className="flex flex-wrap gap-1 max-w-[150px]">
+                                                    {topTech.length > 0 ? topTech.slice(0, 3).map((tech) => (
+                                                        <span
+                                                            key={tech}
+                                                            className="rounded bg-black/5 px-1.5 py-0.5 text-[10px] text-black/60 dark:bg-white/5 dark:text-white/60"
+                                                        >
+                                                            {tech}
+                                                        </span>
+                                                    )) : (
+                                                        <span className="text-[10px] text-black/30 dark:text-white/30">—</span>
+                                                    )}
+                                                    {topTech.length > 3 && (
+                                                        <span className="text-[10px] text-black/30 dark:text-white/30">+{topTech.length - 3}</span>
+                                                    )}
+                                                </div>
+                                            </td>
+
+                                            {/* Contacts column */}
                                             <td className="px-3 py-2.5">
                                                 <div className="flex items-center gap-1.5">
                                                     <span className={cn(
                                                         "rounded-md px-2 py-0.5 text-xs font-semibold",
-                                                        (company as unknown as { employeesCount: number }).employeesCount > 0
-                                                            ? "bg-green-500/10 text-green-400"
+                                                        company.employeesCount > 0
+                                                            ? "bg-purple-500/10 text-purple-400"
                                                             : "bg-black/5 text-black/30 dark:bg-white/5 dark:text-white/30"
                                                     )}>
-                                                        {(company as unknown as { employeesCount: number }).employeesCount || 0}
+                                                        {company.employeesCount || 0}
                                                     </span>
                                                     <span className="text-[10px] text-black/30 dark:text-white/30">people</span>
                                                 </div>
-                                            </td>
-
-                                            <td className="px-3 py-2.5">
-                                                <div className="flex items-center gap-1 text-xs text-black/60 dark:text-white/60">
-                                                    <MapPin className="size-3 text-black/30 dark:text-white/30" />
-                                                    <span className="max-w-[120px] truncate">{company.location || 'Unknown'}</span>
-                                                </div>
-                                            </td>
-
-                                            <td className="px-3 py-2.5">
-                                                <span className="text-xs text-black/60 dark:text-white/60">{company.size || '—'}</span>
                                             </td>
 
                                             <td className="px-3 py-2.5">
