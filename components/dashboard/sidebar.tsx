@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { SignOutButton, OrganizationSwitcher } from '@clerk/nextjs'
 import { cn } from '@/lib/utils'
@@ -46,9 +47,13 @@ export function DashboardSidebar() {
 
             <div className="relative flex h-14 items-center border-b border-white/5 px-6">
                 <Link href="/dashboard" className="flex items-center gap-2">
-                    <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-white to-white/80 shadow-lg shadow-white/10">
-                        <span className="text-sm font-bold text-black">R</span>
-                    </div>
+                    <Image
+                        src="/Group.svg"
+                        alt="RecLead"
+                        width={32}
+                        height={32}
+                        className="size-8"
+                    />
                     <span className="text-lg font-bold">RecLead</span>
                 </Link>
             </div>

@@ -1,11 +1,16 @@
 import { cn } from '@/lib/utils'
+import Image from 'next/image'
 
 export const Logo = ({ className }: { className?: string }) => {
     return (
         <div className={cn('flex items-center gap-2', className)}>
-            <div className="flex size-8 items-center justify-center rounded-lg bg-white">
-                <span className="text-sm font-bold text-black">R</span>
-            </div>
+            <Image
+                src="/Group.svg"
+                alt="RecLead"
+                width={32}
+                height={32}
+                className="size-8"
+            />
             <span className="text-xl font-bold text-foreground">RecLead</span>
         </div>
     )
@@ -13,16 +18,24 @@ export const Logo = ({ className }: { className?: string }) => {
 
 export const LogoIcon = ({ className }: { className?: string }) => {
     return (
-        <div className={cn('flex size-8 items-center justify-center rounded-lg bg-white', className)}>
-            <span className="text-sm font-bold text-black">R</span>
-        </div>
+        <Image
+            src="/Group.svg"
+            alt="RecLead"
+            width={32}
+            height={32}
+            className={cn('size-8', className)}
+        />
     )
 }
 
 export const LogoStroke = ({ className }: { className?: string }) => {
     return (
-        <div className={cn('flex size-7 items-center justify-center rounded-lg border border-foreground/20', className)}>
-            <span className="text-xs font-bold text-foreground">R</span>
-        </div>
+        <Image
+            src="/Group.svg"
+            alt="RecLead"
+            width={28}
+            height={28}
+            className={cn('size-7', className)}
+        />
     )
 }
