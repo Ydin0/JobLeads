@@ -2,15 +2,26 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { leads } from "@/lib/db/schema";
 import { requireOrgAuth } from "@/lib/auth";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 
 // GET /api/leads - List all leads for the organization
-export async function GET() {
+// Optional query param: searchId to filter by ICP/search
+export async function GET(req: Request) {
   try {
     const { orgId } = await requireOrgAuth();
+    const { searchParams } = new URL(req.url);
+    const searchId = searchParams.get('searchId');
+
+    // Build query conditions
+    const conditions = [eq(leads.orgId, orgId)];
+
+    // Filter by searchId (ICP) if provided
+    if (searchId) {
+      conditions.push(eq(leads.searchId, searchId));
+    }
 
     const results = await db.query.leads.findMany({
-      where: eq(leads.orgId, orgId),
+      where: and(...conditions),
       orderBy: [desc(leads.createdAt)],
       with: {
         company: true,

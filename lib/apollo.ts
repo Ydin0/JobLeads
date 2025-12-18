@@ -332,8 +332,9 @@ export async function enrichOrganization(domain: string): Promise<EnrichedCompan
 }
 
 /**
- * Search for people at a company - fetches ALL employees by paginating through results
+ * Search for people at a company - fetches employees by paginating through results
  * @param maxPages - Maximum number of pages to fetch (default 10, max 100 people per page = 1000 people)
+ * @param fetchAll - If true, ignores maxPages and fetches ALL employees (use for global caching)
  */
 export async function searchPeopleAtCompany(params: {
   organizationName?: string;
@@ -342,12 +343,13 @@ export async function searchPeopleAtCompany(params: {
   seniorities?: string[];
   limit?: number; // Deprecated - we now fetch all
   maxPages?: number;
+  fetchAll?: boolean;
 }): Promise<EnrichedPerson[]> {
   if (!APOLLO_API_KEY) {
     throw new Error("APOLLO_API_KEY is not configured");
   }
 
-  const { organizationName, organizationDomain, titles, seniorities, maxPages = 10 } = params;
+  const { organizationName, organizationDomain, titles, seniorities, maxPages = 10, fetchAll = false } = params;
   const perPage = 100; // Max allowed by Apollo API
 
   const baseRequestBody: Record<string, unknown> = {};
@@ -427,10 +429,11 @@ export async function searchPeopleAtCompany(params: {
   let totalEntries = 0;
   let hasMore = true;
 
-  console.log("[Apollo] Starting paginated search for all employees...");
+  const effectiveMaxPages = fetchAll ? Infinity : maxPages;
+  console.log(`[Apollo] Starting paginated search (fetchAll: ${fetchAll}, maxPages: ${fetchAll ? 'unlimited' : maxPages})...`);
 
   try {
-    while (hasMore && currentPage <= maxPages) {
+    while (hasMore && currentPage <= effectiveMaxPages) {
       const requestBody = {
         ...baseRequestBody,
         per_page: perPage,
@@ -491,6 +494,7 @@ export async function searchPeopleAtCompany(params: {
 /**
  * Bulk enrich people using Apollo's People Bulk Match API
  * Uses Apollo person IDs for more accurate matching
+ * Apollo has a limit of 10 people per request, so we batch automatically
  * @param apolloIds - Array of Apollo person IDs to enrich
  * @param revealPhoneNumber - Whether to reveal phone numbers (costs additional credits)
  * @param webhookUrl - Required if revealPhoneNumber is true. Apollo sends phone data asynchronously to this URL.
@@ -516,111 +520,122 @@ export async function bulkEnrichPeople(params: {
     throw new Error("webhookUrl is required when revealPhoneNumber is true");
   }
 
-  // Build details array with person IDs only
-  const details = apolloIds.map(id => ({ id }));
+  // Apollo has a limit of 10 people per bulk_match request
+  const BATCH_SIZE = 10;
+  const allEnrichedPeople: EnrichedPerson[] = [];
 
-  // Build request body
-  // reveal_phone_number and webhook_url must be at the top level, not per-person
-  const requestBody: Record<string, unknown> = { details };
+  // Split into batches of 10
+  for (let i = 0; i < apolloIds.length; i += BATCH_SIZE) {
+    const batchIds = apolloIds.slice(i, i + BATCH_SIZE);
+    const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
+    const totalBatches = Math.ceil(apolloIds.length / BATCH_SIZE);
 
-  // Add phone reveal settings at top level if requested
-  // Phone numbers are delivered asynchronously to the webhook
-  if (revealPhoneNumber) {
-    requestBody.reveal_phone_number = true;
-    requestBody.webhook_url = webhookUrl;
-    console.log("[Apollo] Phone reveal enabled. Webhook URL:", webhookUrl);
-  }
+    console.log(`[Apollo] Bulk enriching batch ${batchNumber}/${totalBatches} (${batchIds.length} people), reveal_phone: ${revealPhoneNumber}`);
 
-  console.log("[Apollo] Bulk enriching", apolloIds.length, "people, reveal_phone:", revealPhoneNumber);
-  console.log("[Apollo] Full request body:", JSON.stringify(requestBody, null, 2));
+    // Build details array with person IDs only
+    const details = batchIds.map(id => ({ id }));
 
-  try {
-    const response = await fetch(`${APOLLO_BASE_URL}/people/bulk_match`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache",
-        "X-Api-Key": APOLLO_API_KEY,
-      },
-      body: JSON.stringify(requestBody),
-    });
+    // Build request body
+    const requestBody: Record<string, unknown> = { details };
 
-    console.log("[Apollo] Response status:", response.status);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("[Apollo] API error:", response.status, errorText);
-      throw new Error(`Apollo API error: ${response.status} - ${errorText}`);
+    // Add phone reveal settings at top level if requested
+    if (revealPhoneNumber) {
+      requestBody.reveal_phone_number = true;
+      requestBody.webhook_url = webhookUrl;
     }
 
-    const responseText = await response.text();
-    console.log("[Apollo] Bulk match raw response:", responseText);
+    try {
+      const response = await fetch(`${APOLLO_BASE_URL}/people/bulk_match`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+          "X-Api-Key": APOLLO_API_KEY,
+        },
+        body: JSON.stringify(requestBody),
+      });
 
-    const data = JSON.parse(responseText);
-    console.log("[Apollo] Bulk match parsed response:", JSON.stringify(data, null, 2));
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[Apollo] Batch ${batchNumber} API error:`, response.status, errorText);
+        // Continue with other batches instead of failing completely
+        continue;
+      }
 
-    // Response contains matches array with full person data
-    interface BulkMatchPerson {
-      id: string;
-      first_name: string;
-      last_name: string;
-      title?: string;
-      email?: string;
-      email_status?: string;
-      linkedin_url?: string;
-      city?: string;
-      state?: string;
-      country?: string;
-      seniority?: string;
-      departments?: string[];
-      phone_numbers?: Array<{
-        raw_number: string;
-        sanitized_number: string;
-        type: string;
-        status: string;
-      }>;
-      organization?: {
+      const data = await response.json();
+
+      // Response contains matches array with full person data
+      interface BulkMatchPerson {
         id: string;
-        name: string;
-        website_url?: string;
+        first_name: string;
+        last_name: string;
+        title?: string;
+        email?: string;
+        email_status?: string;
         linkedin_url?: string;
-        logo_url?: string;
-      };
+        city?: string;
+        state?: string;
+        country?: string;
+        seniority?: string;
+        departments?: string[];
+        phone_numbers?: Array<{
+          raw_number: string;
+          sanitized_number: string;
+          type: string;
+          status: string;
+        }>;
+        organization?: {
+          id: string;
+          name: string;
+          website_url?: string;
+          linkedin_url?: string;
+          logo_url?: string;
+        };
+      }
+
+      const batchEnrichedPeople: EnrichedPerson[] = (data.matches || []).map((person: BulkMatchPerson | null) => {
+        if (!person) return null;
+
+        const primaryPhone = person.phone_numbers?.find(p => p.status === "verified")?.sanitized_number
+          || person.phone_numbers?.[0]?.sanitized_number
+          || null;
+
+        const locationParts = [person.city, person.state, person.country].filter(Boolean);
+        const location = locationParts.length > 0 ? locationParts.join(", ") : null;
+
+        return {
+          apolloId: person.id || null,
+          firstName: person.first_name,
+          lastName: person.last_name,
+          email: person.email || null,
+          phone: primaryPhone,
+          jobTitle: person.title || null,
+          linkedinUrl: person.linkedin_url || null,
+          location,
+          seniority: person.seniority || null,
+          departments: person.departments || [],
+          company: person.organization ? {
+            name: person.organization.name,
+            website: person.organization.website_url || null,
+            linkedinUrl: person.organization.linkedin_url || null,
+            logoUrl: person.organization.logo_url || null,
+          } : null,
+        };
+      }).filter(Boolean);
+
+      allEnrichedPeople.push(...batchEnrichedPeople);
+      console.log(`[Apollo] Batch ${batchNumber} enriched ${batchEnrichedPeople.length} people`);
+
+      // Small delay between batches to avoid rate limiting
+      if (i + BATCH_SIZE < apolloIds.length) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+    } catch (error) {
+      console.error(`[Apollo] Error in batch ${batchNumber}:`, error);
+      // Continue with other batches
     }
-
-    const enrichedPeople: EnrichedPerson[] = (data.matches || []).map((person: BulkMatchPerson | null) => {
-      if (!person) return null;
-
-      const primaryPhone = person.phone_numbers?.find(p => p.status === "verified")?.sanitized_number
-        || person.phone_numbers?.[0]?.sanitized_number
-        || null;
-
-      const locationParts = [person.city, person.state, person.country].filter(Boolean);
-      const location = locationParts.length > 0 ? locationParts.join(", ") : null;
-
-      return {
-        apolloId: person.id || null,
-        firstName: person.first_name,
-        lastName: person.last_name,
-        email: person.email || null,
-        phone: primaryPhone,
-        jobTitle: person.title || null,
-        linkedinUrl: person.linkedin_url || null,
-        location,
-        seniority: person.seniority || null,
-        departments: person.departments || [],
-        company: person.organization ? {
-          name: person.organization.name,
-          website: person.organization.website_url || null,
-          linkedinUrl: person.organization.linkedin_url || null,
-          logoUrl: person.organization.logo_url || null,
-        } : null,
-      };
-    }).filter(Boolean);
-
-    return enrichedPeople;
-  } catch (error) {
-    console.error("[Apollo] Error bulk enriching people:", error);
-    throw error;
   }
+
+  console.log(`[Apollo] Total enriched: ${allEnrichedPeople.length} of ${apolloIds.length} people`);
+  return allEnrichedPeople;
 }

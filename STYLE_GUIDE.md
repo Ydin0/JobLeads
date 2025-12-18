@@ -1,339 +1,331 @@
 # RecLead Style Guide
 
-This document defines the visual and UI standards for RecLead to ensure consistency across the application.
+A Contra-inspired design system with minimal aesthetics, black primary actions, subtle lavender accents for selections, and compact typography.
 
-## Theme
+## Design Philosophy
 
-**Mode:** Dark only (no light mode toggle)
-
-The application uses a dark, glassy, futuristic aesthetic with a clean, minimal, premium SaaS feel.
-
-## Design Principles
-
-1. **Compact & Dense** - Use smaller fonts and tighter spacing for a data-rich, professional feel
-2. **Glassy & Futuristic** - Low opacity backgrounds, blur effects, gradient accents
-3. **Subtle Depth** - Use blur orbs and gradient lines to create visual hierarchy
-4. **Minimal Chrome** - Let content breathe with subtle borders and backgrounds
+1. **Minimal**: Clean white backgrounds, subtle borders, no decorative elements
+2. **Black & White**: Primary actions use solid black, not colored buttons
+3. **Subtle Accents**: Light lavender (`#F8F7FF`) for selected/active states only
+4. **Compact**: Tight typography and spacing for information density
+5. **Consistent**: Uniform patterns across all pages
 
 ## Colors
 
-### Core Palette
+### Primary Actions - Black
+| Context | Light Mode | Dark Mode |
+|---------|-----------|-----------|
+| Button | `bg-black` | `bg-white` |
+| Button Text | `text-white` | `text-black` |
+| Button Hover | `hover:bg-black/80` | `hover:bg-white/90` |
 
+### Selected/Active States - Lavender
+| Context | Light Mode | Dark Mode |
+|---------|-----------|-----------|
+| Background | `#F8F7FF` or `bg-[#F8F7FF]` | `bg-white/10` |
+| Text | `text-black` (NOT purple) | `text-white` |
+| Tab Underline | `bg-black` | `bg-white` |
+
+### Badge Colors
+| Badge | Light Mode | Dark Mode |
+|-------|-----------|-----------|
+| NEW | `bg-[#EDE9FE] text-[#7C3AED]` | `bg-purple-500/20 text-purple-300` |
+| Count (active) | `bg-black text-white` | `bg-white text-black` |
+| Count (inactive) | `bg-black/5 text-black/60` | `bg-white/5 text-white/60` |
+
+### Core Palette - Light Mode
 | Token | Value | Usage |
 |-------|-------|-------|
-| `--background` | `#0a0a0f` | Page backgrounds |
-| `--foreground` | `white` | Primary text |
-| `border-white/5` | 5% white | Subtle borders |
-| `border-white/10` | 10% white | Standard borders |
-| `border-white/20` | 20% white | Active/hover borders |
-| `bg-white/[0.02]` | 2% white | Card backgrounds |
-| `bg-white/[0.04]` | 4% white | Hover backgrounds |
-| `bg-white/5` | 5% white | Input backgrounds |
-| `bg-white/10` | 10% white | Active states |
+| Background | `#ffffff` | Page backgrounds |
+| Card | `#ffffff` | Card backgrounds |
+| Border | `rgba(0,0,0,0.1)` or `border-black/10` | Borders, dividers |
+| Border Light | `rgba(0,0,0,0.05)` or `border-black/5` | Subtle dividers |
+| Text Primary | `#000000` or `text-black` | Headings, primary text |
+| Text Secondary | `rgba(0,0,0,0.6)` or `text-black/60` | Body text |
+| Text Muted | `rgba(0,0,0,0.4)` or `text-black/40` | Placeholder, labels |
+| Text Faint | `rgba(0,0,0,0.5)` or `text-black/50` | Descriptions |
 
-### Text Opacity Scale
+### Core Palette - Dark Mode
+| Token | Value | Usage |
+|-------|-------|-------|
+| Background | `#0a0a0f` | Page backgrounds |
+| Card | `rgba(255,255,255,0.02)` or `bg-white/[0.02]` | Card backgrounds |
+| Border | `rgba(255,255,255,0.1)` or `border-white/10` | Borders, dividers |
+| Text Primary | `#ffffff` or `text-white` | Headings, primary text |
+| Text Secondary | `rgba(255,255,255,0.6)` or `text-white/60` | Body text |
+| Text Muted | `rgba(255,255,255,0.4)` or `text-white/40` | Placeholder, labels |
 
-| Class | Usage |
-|-------|-------|
-| `text-white` | Primary text, headings, values |
-| `text-white/70` | Secondary text, descriptions |
-| `text-white/60` | Body text in cards |
-| `text-white/40` | Labels, descriptions, muted text |
-| `text-white/30` | Meta text, timestamps, placeholders |
-| `text-white/20` | Dividers, very subtle text |
-
-### Accent Colors
-
-| Color | Gradient | Usage |
-|-------|----------|-------|
-| Purple/Blue | `from-purple-500 to-blue-500` | Enrich buttons, primary actions |
-| Blue/Cyan | `from-blue-500 to-cyan-500` | Search-related, create actions |
-| Green | `text-green-400`, `bg-green-500/10` | Success, new, active states |
-| Yellow | `text-yellow-400`, `bg-yellow-500/10` | Warning, paused states |
-| Red | `text-red-400`, `bg-red-500/10` | Error, rejected states |
-| Purple | `text-purple-400`, `bg-purple-500/10` | Qualified, premium features |
+### Status Colors
+| Status | Light Mode | Dark Mode |
+|--------|-----------|-----------|
+| Success | `text-green-600` | `text-green-400` |
+| Error | `text-red-600` | `text-red-400` |
+| Warning | `text-amber-600` | `text-amber-400` |
 
 ## Typography
 
 ### Font Family
-- **Sans:** Geist Sans (via `--font-geist-sans`)
-- **Mono:** Geist Mono (via `--font-geist-mono`)
+- **Primary:** Halenoir (via `--font-halenoir`)
+- **Mono:** System monospace
 
-### Dashboard Font Sizes (Compact)
-
+### Font Sizes (Compact)
 | Element | Size | Class |
 |---------|------|-------|
-| Page title | 20px | `text-xl` |
-| Page description | 14px | `text-sm text-white/40` |
-| Section title | 14px | `text-sm font-medium` |
-| Card title | 14px | `text-sm font-medium` |
-| Body text | 12px | `text-xs` |
-| Meta text | 10px | `text-[10px]` |
-| Tiny labels | 9px | `text-[9px]` |
-| Stat values | 24px | `text-2xl font-semibold` |
-| Modal stat values | 20px | `text-xl font-bold` |
-
-### Font Weights
-- `font-normal` - Body text
-- `font-medium` - Labels, card titles, emphasis
-- `font-semibold` - Page headings, stat values
-- `font-bold` - Logo text, strong emphasis
-
-## Spacing
-
-### Dashboard Spacing (Compact)
-
-| Context | Value | Class |
-|---------|-------|-------|
-| Page sections | 16px | `space-y-4` |
-| Card grid | 12px | `gap-3` |
-| Card padding | 12px | `p-3` |
-| Card internal | 8px | `space-y-2` |
-| Table row padding | 10px | `py-2.5 px-3` |
-| Modal padding | 16px | `p-4` |
-| Footer padding | 12px | `py-3 px-4` |
+| Page title | 18px | `text-lg font-semibold` |
+| Section label | 10px | `text-[10px] font-semibold uppercase tracking-wider` |
+| Nav items | 13px | `text-[13px] font-medium` |
+| Body text | 13px-14px | `text-[13px]` or `text-sm` |
+| Small text | 12px | `text-xs` |
+| Tiny text | 10px | `text-[10px]` |
+| Large stats | 30px | `text-3xl font-semibold` |
 
 ## Components
-
-### Glassy Cards
-
-```tsx
-// Standard card
-<div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02] backdrop-blur-sm">
-  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-  {/* Content */}
-</div>
-
-// Card with blur orb
-<div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02]">
-  <div className="absolute -right-20 -top-20 size-40 rounded-full bg-purple-500/5 blur-3xl" />
-  <div className="relative">{/* Content */}</div>
-</div>
-```
-
-### Modals
-
-```tsx
-<div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-  {/* Backdrop */}
-  <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={onClose} />
-
-  {/* Modal */}
-  <div className="relative flex h-[600px] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0f]/95 shadow-2xl shadow-purple-500/5 backdrop-blur-xl">
-    {/* Gradient accents */}
-    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-purple-500/50 to-transparent" />
-    <div className="absolute -left-20 -top-20 size-40 rounded-full bg-purple-500/10 blur-3xl" />
-    <div className="absolute -right-20 -top-20 size-40 rounded-full bg-blue-500/10 blur-3xl" />
-
-    {/* Header */}
-    <div className="relative flex shrink-0 items-center justify-between border-b border-white/5 px-4 py-3">
-      <div>
-        <h2 className="text-base font-semibold text-white">Modal Title</h2>
-        <p className="text-xs text-white/40">Description text</p>
-      </div>
-      <button className="rounded-lg p-1.5 text-white/40 hover:bg-white/10 hover:text-white">
-        <X className="size-4" />
-      </button>
-    </div>
-
-    {/* Content */}
-    <div className="relative flex-1 overflow-y-auto p-4">
-      {/* ... */}
-    </div>
-
-    {/* Footer */}
-    <div className="relative flex shrink-0 items-center justify-between border-t border-white/5 bg-white/[0.02] px-4 py-3">
-      {/* ... */}
-    </div>
-  </div>
-</div>
-```
 
 ### Buttons
 
 ```tsx
-// Primary button (compact)
-<Button size="sm" className="h-7 bg-white px-3 text-xs text-black hover:bg-white/90">
+// Primary button (Black - rounded-full)
+<Button className="h-9 rounded-full bg-black px-4 text-sm font-medium text-white hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/90">
   Action
 </Button>
 
-// Gradient button
-<Button size="sm" className="h-7 bg-gradient-to-r from-purple-500 to-blue-500 px-3 text-xs text-white hover:from-purple-600 hover:to-blue-600">
-  <Sparkles className="mr-1.5 size-3" />
-  Enrich
+// Secondary/Outline button (rounded-full)
+<Button variant="outline" className="h-9 rounded-full border-black/10 px-4 text-sm font-medium hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5">
+  Secondary
 </Button>
 
 // Ghost button
-<Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-white/40 hover:bg-white/10 hover:text-white">
-  Cancel
+<Button variant="ghost" className="text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white">
+  Ghost
 </Button>
 
-// Outline button
-<Button variant="outline" size="sm" className="h-7 border-white/10 bg-white/5 px-2.5 text-xs text-white hover:bg-white/10">
-  Secondary
+// Icon button
+<Button variant="ghost" size="icon" className="size-8 rounded-full text-black/40 hover:bg-black/5 hover:text-black dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white">
+  <Icon className="size-4" />
 </Button>
+```
+
+### Navigation Section Labels
+
+```tsx
+// Section label (Contra-style small caps)
+<div className="px-3 py-1.5">
+  <span className="text-[10px] font-semibold uppercase tracking-wider text-black/40 dark:text-white/40">
+    SECTION NAME
+  </span>
+</div>
+```
+
+### Navigation Items
+
+```tsx
+// Active nav item (Lavender background, BLACK text)
+<Link className="flex items-center gap-3 rounded-lg bg-[#F8F7FF] px-3 py-2 text-[13px] font-medium text-black dark:bg-white/10 dark:text-white">
+  <Icon className="size-4 text-black dark:text-white" />
+  <span>Label</span>
+</Link>
+
+// Inactive nav item
+<Link className="flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium text-black/60 hover:bg-black/[0.02] hover:text-black dark:text-white/60 dark:hover:bg-white/[0.02] dark:hover:text-white">
+  <Icon className="size-4 text-black/40 dark:text-white/40" />
+  <span>Label</span>
+</Link>
+```
+
+### Badges
+
+```tsx
+// NEW badge (Lavender with purple text)
+<span className="ml-auto rounded-full bg-[#EDE9FE] px-2 py-0.5 text-[10px] font-medium text-[#7C3AED] dark:bg-purple-500/20 dark:text-purple-300">
+  NEW
+</span>
+
+// Active count badge (Black)
+<span className="rounded-full bg-black px-2 py-0.5 text-[10px] font-medium text-white dark:bg-white dark:text-black">
+  24
+</span>
+
+// Inactive count badge
+<span className="rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium text-black/60 dark:bg-white/5 dark:text-white/60">
+  12
+</span>
+```
+
+### Tabs
+
+```tsx
+// Tab navigation with underline
+<div className="flex gap-6 border-b border-black/5 dark:border-white/5">
+  {tabs.map((tab) => (
+    <button
+      key={tab.id}
+      onClick={() => setActiveTab(tab.id)}
+      className={cn(
+        'relative flex items-center gap-2 pb-3 text-sm font-medium transition-colors',
+        activeTab === tab.id
+          ? 'text-black dark:text-white'
+          : 'text-black/40 hover:text-black/60 dark:text-white/40 dark:hover:text-white/60'
+      )}
+    >
+      <tab.icon className="size-4" />
+      {tab.label}
+      <span className={cn(
+        'rounded-full px-2 py-0.5 text-[10px] font-medium',
+        activeTab === tab.id
+          ? 'bg-black text-white dark:bg-white dark:text-black'
+          : 'bg-black/5 text-black/60 dark:bg-white/5 dark:text-white/60'
+      )}>
+        {tab.count}
+      </span>
+      {activeTab === tab.id && (
+        <div className="absolute -bottom-px left-0 right-0 h-0.5 bg-black dark:bg-white" />
+      )}
+    </button>
+  ))}
+</div>
+```
+
+### Cards
+
+```tsx
+// Standard card
+<div className="rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.02]">
+  {/* Content */}
+</div>
+
+// Interactive card (with hover)
+<div className="rounded-xl border border-black/10 bg-white p-4 transition-colors hover:border-black/20 dark:border-white/10 dark:bg-white/[0.02] dark:hover:border-white/20">
+  {/* Content */}
+</div>
+
+// Add new placeholder card (dashed border)
+<div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-black/10 bg-black/[0.01] p-6 transition-colors hover:border-black/20 hover:bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.01] dark:hover:border-white/20">
+  <div className="flex size-12 items-center justify-center rounded-full bg-black/5 dark:bg-white/5">
+    <Plus className="size-6 text-black/40 dark:text-white/40" />
+  </div>
+  <span className="mt-3 text-sm font-medium text-black/60 dark:text-white/60">
+    Add new item
+  </span>
+</div>
+```
+
+### Stats Row
+
+```tsx
+// Horizontal stats display
+<div className="flex items-center gap-8 border-b border-black/5 pb-6 dark:border-white/5">
+  <div>
+    <div className="text-3xl font-semibold text-black dark:text-white">24</div>
+    <div className="mt-1 text-sm text-black/50 dark:text-white/50">Total Items</div>
+  </div>
+  <div className="h-10 w-px bg-black/10 dark:bg-white/10" />
+  <div>
+    <div className="text-3xl font-semibold text-black dark:text-white">156</div>
+    <div className="mt-1 text-sm text-black/50 dark:text-white/50">Processed</div>
+  </div>
+  {/* More stats... */}
+</div>
+```
+
+### Promotional Card (Sidebar)
+
+```tsx
+// Minimal upgrade card
+<div className="rounded-xl border border-black/5 bg-[#FAFAFA] p-4 dark:border-white/5 dark:bg-white/[0.02]">
+  <div className="flex items-center gap-2">
+    <Sparkles className="size-4 text-black/40 dark:text-white/40" />
+    <span className="text-xs font-medium text-black/60 dark:text-white/60">
+      Free Plan
+    </span>
+  </div>
+  <p className="mt-2 text-[13px] font-medium text-black dark:text-white">
+    Unlock unlimited leads
+  </p>
+  <p className="mt-1 text-xs text-black/50 dark:text-white/50">
+    Get advanced filters and CRM sync
+  </p>
+  <button className="mt-3 w-full rounded-full bg-black py-2 text-xs font-medium text-white transition-colors hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/90">
+    Upgrade to Pro
+  </button>
+</div>
 ```
 
 ### Inputs
 
 ```tsx
-// Standard input (compact)
+// Text input (minimal)
 <input
   type="text"
-  placeholder="Placeholder..."
-  className="h-8 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-white/30 focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/10"
+  placeholder="Search..."
+  className="w-full rounded-lg border border-black/10 bg-black/[0.02] px-3 py-2 text-sm text-black placeholder:text-black/40 focus:border-black/20 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/40 dark:focus:border-white/20"
 />
 
 // Search input with icon
 <div className="relative">
-  <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-white/30" />
-  <input className="h-8 w-full rounded-lg border border-white/10 bg-white/5 pl-9 pr-3 text-sm ..." />
-</div>
-
-// Select dropdown
-<select className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-sm text-white focus:border-white/20 focus:outline-none">
-  <option className="bg-[#0a0a0f]">Option</option>
-</select>
-```
-
-### Status Badges
-
-```tsx
-// Status badge (compact)
-<span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium text-green-400 ring-1 ring-inset ring-green-500/20">
-  <CheckCircle2 className="size-2.5" />
-  Active
-</span>
-
-// Tag/chip
-<span className="rounded bg-white/10 px-1.5 py-0.5 text-xs text-white/40">
-  Technology
-</span>
-
-// Filter button
-<button className={cn(
-  'rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all',
-  isActive ? 'bg-white/10 text-white' : 'text-white/40 hover:bg-white/5 hover:text-white/60'
-)}>
-  Filter
-</button>
-```
-
-### Stats Cards
-
-```tsx
-<div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02] p-3 backdrop-blur-sm">
-  <div className="relative flex items-center gap-3">
-    <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 shadow-lg">
-      <Icon className="size-4 text-white" />
-    </div>
-    <div>
-      <div className="text-2xl font-semibold text-white">47</div>
-      <div className="text-sm text-white/40">Stat Name</div>
-    </div>
-  </div>
+  <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-black/40 dark:text-white/40" />
+  <input
+    type="text"
+    placeholder="Search..."
+    className="w-full rounded-lg border border-black/10 bg-black/[0.02] py-2 pl-9 pr-3 text-sm text-black placeholder:text-black/40 focus:border-black/20 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/40"
+  />
 </div>
 ```
 
 ### Tables
 
 ```tsx
-<div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02]">
-  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-  <table className="w-full">
-    <thead>
-      <tr className="border-b border-white/5 bg-white/[0.02]">
-        <th className="px-3 py-2.5 text-left text-xs font-medium text-white/40">Column</th>
-      </tr>
-    </thead>
-    <tbody className="divide-y divide-white/5">
-      <tr className="transition-colors hover:bg-white/[0.03]">
-        <td className="px-3 py-2.5 text-xs text-white">Value</td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+// Minimal table
+<table className="w-full">
+  <thead>
+    <tr className="border-b border-black/5 dark:border-white/5">
+      <th className="pb-3 text-left text-xs font-medium text-black/40 dark:text-white/40">
+        Column
+      </th>
+    </tr>
+  </thead>
+  <tbody className="divide-y divide-black/5 dark:divide-white/5">
+    <tr className="group">
+      <td className="py-3 text-sm text-black dark:text-white">
+        Content
+      </td>
+    </tr>
+  </tbody>
+</table>
 ```
 
-### Icons
+## Spacing
 
-Use Lucide icons with consistent sizing:
+| Context | Value | Class |
+|---------|-------|-------|
+| Page sections | 24px | `space-y-6` |
+| Stats gap | 32px | `gap-8` |
+| Nav sections | 16px | `space-y-4` |
+| Nav items | 2px | `space-y-0.5` |
+| Card grid | 16px | `gap-4` |
+| Card padding | 16-24px | `p-4` or `p-6` |
+| Nav item padding | 8px/12px | `py-2 px-3` |
 
-| Context | Size | Class |
-|---------|------|-------|
-| Inline with text-xs | 12px | `size-3` |
-| Inline with text-sm | 14px | `size-3.5` |
-| Button icons | 12px | `size-3` |
-| Stat card icons | 16px | `size-4` |
-| Avatar icons | 16-20px | `size-4` to `size-5` |
+## Do's and Don'ts
 
-```tsx
-import { Search, Users, Sparkles, Check } from 'lucide-react'
+### Do
+- Use solid black for primary buttons
+- Use subtle lavender (`#F8F7FF`) for selected states with BLACK text
+- Use rounded-full for buttons
+- Keep borders very subtle (5-10% opacity)
+- Use horizontal stats rows for key metrics
+- Use black underlines for active tabs
+- Keep typography compact (13px for nav items)
+- Use dashed borders for "add new" placeholder cards
 
-<Search className="size-3.5 text-white/30" />
-<Check className="size-2.5 text-green-400" />
-```
-
-## Decorative Elements
-
-### Blur Orbs
-
-```tsx
-// Corner blur orb
-<div className="absolute -right-20 -top-20 size-40 rounded-full bg-purple-500/10 blur-3xl" />
-
-// Centered blur orb
-<div className="absolute -left-32 -top-32 size-64 rounded-full bg-blue-500/10 blur-3xl" />
-```
-
-### Gradient Lines
-
-```tsx
-// Top border accent
-<div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-purple-500/50 to-transparent" />
-
-// Subtle divider
-<div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-```
-
-### Gradient Backgrounds
-
-```tsx
-// Card with gradient
-<div className="bg-gradient-to-br from-white/[0.05] to-transparent" />
-
-// Accent card
-<div className="border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 to-blue-500/5" />
-```
-
-## Animation
-
-Use subtle, performant animations:
-- `transition-colors` for hover states
-- `transition-all` for complex state changes
-- `duration-200` to `duration-300` for transitions
-- Avoid heavy animations for data-dense UIs
-
-## Accessibility
-
-- Maintain sufficient color contrast (WCAG AA minimum)
-- Use semantic HTML elements
-- Include `aria-label` for icon-only buttons
-- Ensure focus states are visible (`focus:ring-1 focus:ring-white/10`)
-
-## File Naming Conventions
-
-- Components: `kebab-case.tsx` (e.g., `pricing-modal.tsx`)
-- Pages: `page.tsx` in route folders
-- Layouts: `layout.tsx` in route folders
-
-## Import Order
-
-1. React/Next.js imports
-2. Third-party libraries
-3. Components (`@/components/...`)
-4. Utilities (`@/lib/...`)
-5. Types
+### Don't
+- Use purple/colored buttons for primary actions
+- Use purple text for selected sidebar items (use black)
+- Use gradient buttons or backgrounds
+- Add decorative blur orbs or grid patterns
+- Use heavy shadows on cards
+- Use animated notification badges with colored pings
+- Use backdrop-blur effects
+- Make typography too large
 
 ## Quick Reference
 
@@ -341,35 +333,105 @@ Use subtle, performant animations:
 
 ```
 // Backgrounds
-bg-white/[0.02]    - Cards, surfaces
-bg-white/[0.04]    - Hover states
-bg-white/5         - Inputs, elevated
-bg-white/10        - Active states
-bg-[#0a0a0f]/95    - Modal backgrounds
+bg-white                    - Cards (light)
+bg-white/[0.02]            - Cards (dark)
+bg-[#F8F7FF]               - Selected states (light)
+bg-white/10                - Selected states (dark)
+bg-black/[0.02]            - Input backgrounds (light)
+bg-white/5                 - Input backgrounds (dark)
+bg-[#FAFAFA]               - Subtle card background (light)
+bg-black/[0.01]            - Placeholder cards (light)
 
 // Borders
-border-white/5     - Subtle borders
-border-white/10    - Standard borders
-border-white/20    - Active borders
+border-black/10            - Standard borders (light)
+border-white/10            - Standard borders (dark)
+border-black/5             - Subtle dividers (light)
+border-white/5             - Subtle dividers (dark)
+border-dashed              - Placeholder card borders
 
 // Text
-text-white         - Primary
-text-white/40      - Secondary/muted
-text-white/30      - Meta/timestamps
+text-black                 - Primary (light)
+text-white                 - Primary (dark)
+text-black/60              - Secondary (light)
+text-white/60              - Secondary (dark)
+text-black/40              - Muted/labels (light)
+text-white/40              - Muted/labels (dark)
+text-black/50              - Descriptions (light)
+text-white/50              - Descriptions (dark)
+
+// Buttons
+bg-black text-white        - Primary button (light)
+bg-white text-black        - Primary button (dark)
+rounded-full               - Button border radius
+h-9 px-4                   - Standard button size
 
 // Sizing
-h-7                - Compact buttons
-h-8                - Standard inputs
-h-9                - Form inputs
-size-3             - Small icons
-size-4             - Standard icons
-size-8             - Card icons
+h-8                        - Small buttons
+h-9                        - Standard buttons
+size-4                     - Standard icons
+size-5                     - Larger icons
 
-// Spacing
-p-3                - Card padding
-p-4                - Modal sections
-py-2.5 px-3        - Table cells
-gap-2              - Tight grid
-gap-3              - Standard grid
-space-y-4          - Section spacing
+// Typography
+text-[10px]                - Section labels, badges
+text-[13px]                - Nav items, body
+text-xs                    - Small text (12px)
+text-sm                    - Body text (14px)
+text-lg                    - Page titles
+text-3xl                   - Large stats
+```
+
+## Page Layout Patterns
+
+### List Page with Stats
+```tsx
+<div className="space-y-6">
+  {/* Header with title and action button */}
+  <div className="flex items-center justify-between">
+    <h1 className="text-lg font-semibold">Page Title</h1>
+    <Button className="h-9 rounded-full bg-black px-4 text-sm font-medium text-white">
+      Add New
+    </Button>
+  </div>
+
+  {/* Stats Row */}
+  <div className="flex items-center gap-8 border-b border-black/5 pb-6">
+    {/* Stats... */}
+  </div>
+
+  {/* Content Grid */}
+  <div className="grid grid-cols-3 gap-4">
+    {/* Cards... */}
+  </div>
+</div>
+```
+
+### Detail Page with Tabs
+```tsx
+<div className="space-y-6">
+  {/* Back button and header */}
+  <div className="flex items-center gap-4">
+    <Button variant="ghost" size="icon" className="size-8 rounded-full">
+      <ArrowLeft className="size-4" />
+    </Button>
+    <h1 className="text-lg font-semibold">Item Name</h1>
+    <div className="ml-auto flex items-center gap-2">
+      {/* Action buttons */}
+    </div>
+  </div>
+
+  {/* Stats Row */}
+  <div className="flex items-center gap-8 border-b border-black/5 pb-6">
+    {/* Stats... */}
+  </div>
+
+  {/* Tabs */}
+  <div className="flex gap-6 border-b border-black/5">
+    {/* Tab buttons with underline */}
+  </div>
+
+  {/* Tab Content */}
+  <div>
+    {/* Content based on active tab */}
+  </div>
+</div>
 ```

@@ -1,14 +1,107 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { searches, companies, jobs, leads } from "@/lib/db/schema";
+import { searches, companies, jobs, leads, scraperRuns, globalCompanies } from "@/lib/db/schema";
 import { requireOrgAuth } from "@/lib/auth";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import {
   runLinkedInJobsSearch,
   extractCompaniesFromJobs,
   LinkedInJobsInput,
+  LinkedInJobResult,
 } from "@/lib/apify";
 import { categorizeJob, extractTechStack } from "@/lib/job-analysis";
+import { enrichCompanyWithPDL } from "@/lib/pdl";
+
+// Auto-enrich a company from global cache or PDL
+async function autoEnrichCompany(
+  companyId: string,
+  companyName: string,
+  linkedinUrl: string | null
+): Promise<void> {
+  try {
+    // First, check if we have this company in global cache by LinkedIn URL
+    if (linkedinUrl) {
+      const cached = await db.query.globalCompanies.findFirst({
+        where: eq(globalCompanies.linkedinUrl, linkedinUrl),
+      });
+
+      if (cached) {
+        console.log(`[Auto-Enrich] Found cached data for ${companyName} by LinkedIn URL`);
+        // Update the org company with cached data
+        await db.update(companies).set({
+          domain: cached.domain,
+          industry: cached.industry,
+          size: cached.size,
+          location: cached.location,
+          websiteUrl: cached.websiteUrl,
+          description: cached.description,
+          isEnriched: true,
+          enrichedAt: new Date(),
+          updatedAt: new Date(),
+        }).where(eq(companies.id, companyId));
+        return;
+      }
+    }
+
+    // Not in cache, call PDL to enrich
+    console.log(`[Auto-Enrich] Calling PDL for ${companyName}`);
+    const enriched = await enrichCompanyWithPDL({
+      linkedinUrl: linkedinUrl || undefined,
+      name: companyName,
+    });
+
+    if (!enriched) {
+      console.log(`[Auto-Enrich] PDL returned no data for ${companyName}`);
+      return;
+    }
+
+    // Save to global cache if we have a domain
+    if (enriched.domain) {
+      try {
+        await db.insert(globalCompanies).values({
+          domain: enriched.domain,
+          name: enriched.name || companyName,
+          industry: enriched.industry,
+          size: enriched.size,
+          location: enriched.location,
+          linkedinUrl: enriched.linkedinUrl,
+          websiteUrl: enriched.website,
+          logoUrl: enriched.logoUrl,
+          description: enriched.description,
+          enrichmentSource: "pdl",
+          metadata: {
+            tags: enriched.tags,
+            type: enriched.type,
+            foundedYear: enriched.foundedYear,
+            employeeCount: enriched.employeeCount,
+          },
+        }).onConflictDoNothing();
+        console.log(`[Auto-Enrich] Saved ${companyName} to global cache`);
+      } catch (err) {
+        // Ignore duplicate key errors
+        console.log(`[Auto-Enrich] Could not save to global cache:`, err);
+      }
+    }
+
+    // Update the org company with enriched data
+    await db.update(companies).set({
+      domain: enriched.domain,
+      industry: enriched.industry,
+      size: enriched.size,
+      location: enriched.location,
+      websiteUrl: enriched.website,
+      description: enriched.description,
+      isEnriched: true,
+      enrichedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(companies.id, companyId));
+
+    console.log(`[Auto-Enrich] Updated ${companyName} with PDL data`);
+  } catch (err) {
+    console.error(`[Auto-Enrich] Error enriching ${companyName}:`, err);
+    // Don't throw - enrichment failure shouldn't fail the scrape
+  }
+}
 
 // Helper to parse full name into first and last name
 function parseFullName(fullName: string): { firstName: string; lastName: string } {
@@ -21,18 +114,360 @@ function parseFullName(fullName: string): { firstName: string; lastName: string 
   return { firstName, lastName };
 }
 
-// Extend timeout for Apify actor runs (can take several minutes)
+// Extend timeout for Apify actor runs (can take several minutes per scraper)
 export const maxDuration = 300; // 5 minutes
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-// POST /api/searches/[id]/run - Execute a search and store results
+interface ScraperConfig {
+  jobTitle: string;
+  location: string;
+  experienceLevel: string;
+}
+
+interface SearchFilters {
+  jobTitles?: string[];
+  locations?: string[];
+  companyNames?: string[];
+  companyIds?: string[];
+  keywords?: string[];
+  departments?: string[];
+  techStack?: string[];
+  minJobs?: number;
+  scrapers?: ScraperConfig[];
+  jobBoards?: string[];
+  maxRows?: number;
+  publishedAt?: string;
+}
+
+// Process job results and store companies, jobs, leads
+async function processJobResults(
+  jobResults: LinkedInJobResult[],
+  orgId: string,
+  searchId: string,
+  existingCompanyMap: Map<string, string>
+): Promise<{
+  companiesStored: number;
+  newCompanies: number;
+  jobsStored: number;
+  leadsCreated: number;
+  companyIdMap: Map<string, string>;
+}> {
+  // Extract unique companies from results
+  const extractedCompanies = extractCompaniesFromJobs(jobResults);
+
+  // Store companies in database and track their IDs
+  const companyIdMap = new Map<string, string>(existingCompanyMap);
+  let newCompanies = 0;
+  const companiesToEnrich: Array<{ id: string; name: string; linkedinUrl: string | null }> = [];
+
+  for (const company of extractedCompanies) {
+    const companyKey = company.name.toLowerCase();
+
+    // Skip if we already have this company
+    if (companyIdMap.has(companyKey)) continue;
+
+    const [inserted] = await db
+      .insert(companies)
+      .values({
+        orgId,
+        searchId,
+        name: company.name,
+        linkedinUrl: company.linkedinUrl,
+        logoUrl: company.logoUrl,
+        metadata: {
+          linkedinId: company.linkedinId,
+          jobCount: company.jobCount,
+        },
+      })
+      .onConflictDoNothing()
+      .returning();
+
+    if (inserted) {
+      newCompanies++;
+      companyIdMap.set(companyKey, inserted.id);
+      // Queue for auto-enrichment
+      companiesToEnrich.push({
+        id: inserted.id,
+        name: company.name,
+        linkedinUrl: company.linkedinUrl,
+      });
+    }
+  }
+
+  // Auto-enrich new companies in the background (don't await all - fire and forget)
+  // Process in batches of 5 to avoid rate limiting
+  if (companiesToEnrich.length > 0) {
+    console.log(`[Search Run] Auto-enriching ${companiesToEnrich.length} new companies...`);
+
+    // Fire off enrichment but don't wait for all to complete
+    // This allows the response to return faster
+    (async () => {
+      const batchSize = 5;
+      for (let i = 0; i < companiesToEnrich.length; i += batchSize) {
+        const batch = companiesToEnrich.slice(i, i + batchSize);
+        await Promise.allSettled(
+          batch.map(c => autoEnrichCompany(c.id, c.name, c.linkedinUrl))
+        );
+        // Small delay between batches to avoid rate limiting
+        if (i + batchSize < companiesToEnrich.length) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+      console.log(`[Search Run] Finished auto-enriching ${companiesToEnrich.length} companies`);
+    })();
+  }
+
+  // Store jobs in database
+  let jobsStored = 0;
+  for (const job of jobResults) {
+    if (!job.companyName) continue;
+
+    const companyId = companyIdMap.get(job.companyName.toLowerCase());
+    if (!companyId) continue;
+
+    try {
+      const department = categorizeJob(job.title);
+      const techStack = extractTechStack(job.description);
+
+      await db.insert(jobs).values({
+        orgId,
+        companyId,
+        searchId,
+        externalId: job.id?.toString(),
+        title: job.title,
+        jobUrl: job.jobUrl,
+        location: job.location,
+        salary: job.salary,
+        contractType: job.contractType,
+        experienceLevel: job.experienceLevel,
+        workType: job.workType,
+        sector: job.sector,
+        department,
+        techStack,
+        description: job.description,
+        postedTime: job.postedTime,
+        publishedAt: job.publishedAt ? new Date(job.publishedAt) : null,
+        applicationsCount: job.applicationsCount,
+        applyUrl: job.applyUrl,
+        applyType: job.applyType,
+        posterName: job.posterFullName,
+        posterUrl: job.posterProfileUrl,
+      }).onConflictDoNothing();
+      jobsStored++;
+    } catch (err) {
+      console.error("[Search Run] Error storing job:", err);
+    }
+  }
+
+  // Create leads from job posters
+  let leadsCreated = 0;
+  const seenPosterUrls = new Set<string>();
+
+  for (const job of jobResults) {
+    if (!job.posterFullName || !job.posterProfileUrl) continue;
+    if (seenPosterUrls.has(job.posterProfileUrl)) continue;
+    seenPosterUrls.add(job.posterProfileUrl);
+
+    if (!job.companyName) continue;
+    const companyId = companyIdMap.get(job.companyName.toLowerCase());
+    if (!companyId) continue;
+
+    try {
+      const { firstName, lastName } = parseFullName(job.posterFullName);
+
+      await db.insert(leads).values({
+        orgId,
+        companyId,
+        searchId,
+        firstName,
+        lastName,
+        linkedinUrl: job.posterProfileUrl,
+        jobTitle: "Job Poster",
+        status: "new",
+        metadata: {
+          source: "linkedin_job_poster",
+          jobTitle: job.title,
+          jobUrl: job.jobUrl,
+        },
+      }).onConflictDoNothing();
+      leadsCreated++;
+    } catch (err) {
+      console.error("[Search Run] Error creating lead:", err);
+    }
+  }
+
+  return {
+    companiesStored: companyIdMap.size,
+    newCompanies,
+    jobsStored,
+    leadsCreated,
+    companyIdMap,
+  };
+}
+
+// Run a single scraper (can accept pre-created run ID or create new one)
+async function runSingleScraper(
+  scraper: ScraperConfig,
+  scraperIndex: number,
+  orgId: string,
+  searchId: string,
+  maxRows: number,
+  existingCompanyMap: Map<string, string>,
+  existingRunId?: string
+): Promise<{
+  scraperRunId: string;
+  jobsFound: number;
+  companiesFound: number;
+  newCompanies: number;
+  leadsCreated: number;
+  companyIdMap: Map<string, string>;
+  error?: string;
+  cancelled?: boolean;
+}> {
+  const startTime = Date.now();
+
+  let scraperRunId: string;
+
+  if (existingRunId) {
+    // Check if the queued run was cancelled
+    const existingRun = await db.query.scraperRuns.findFirst({
+      where: eq(scraperRuns.id, existingRunId),
+    });
+
+    if (!existingRun) {
+      return {
+        scraperRunId: existingRunId,
+        jobsFound: 0,
+        companiesFound: 0,
+        newCompanies: 0,
+        leadsCreated: 0,
+        companyIdMap: existingCompanyMap,
+        error: "Scraper run not found",
+      };
+    }
+
+    if (existingRun.status === "cancelled") {
+      console.log(`[Search Run] Scraper ${scraperIndex} was cancelled, skipping`);
+      return {
+        scraperRunId: existingRunId,
+        jobsFound: 0,
+        companiesFound: 0,
+        newCompanies: 0,
+        leadsCreated: 0,
+        companyIdMap: existingCompanyMap,
+        cancelled: true,
+      };
+    }
+
+    // Update status to running
+    await db
+      .update(scraperRuns)
+      .set({
+        status: "running",
+        startedAt: new Date(),
+      })
+      .where(eq(scraperRuns.id, existingRunId));
+
+    scraperRunId = existingRunId;
+  } else {
+    // Create new scraper run record
+    const [scraperRun] = await db
+      .insert(scraperRuns)
+      .values({
+        searchId,
+        orgId,
+        scraperIndex,
+        scraperConfig: scraper,
+        status: "running",
+      })
+      .returning();
+
+    scraperRunId = scraperRun.id;
+  }
+
+  try {
+    console.log(`[Search Run] Running scraper ${scraperIndex}: "${scraper.jobTitle}" in "${scraper.location}"`);
+
+    // Build Apify input for this specific scraper
+    const apifyInput: LinkedInJobsInput = {
+      title: scraper.jobTitle,
+      location: scraper.location,
+      rows: maxRows,
+    };
+
+    // Run the LinkedIn Jobs search
+    const jobResults = await runLinkedInJobsSearch(apifyInput);
+    console.log(`[Search Run] Scraper ${scraperIndex} returned ${jobResults.length} jobs`);
+
+    // Process results
+    const results = await processJobResults(jobResults, orgId, searchId, existingCompanyMap);
+
+    // Calculate duration
+    const duration = Math.round((Date.now() - startTime) / 1000);
+
+    // Update scraper run with results
+    await db
+      .update(scraperRuns)
+      .set({
+        status: "completed",
+        jobsFound: jobResults.length,
+        companiesFound: results.companiesStored,
+        newCompanies: results.newCompanies,
+        leadsCreated: results.leadsCreated,
+        duration,
+        completedAt: new Date(),
+      })
+      .where(eq(scraperRuns.id, scraperRunId));
+
+    return {
+      scraperRunId,
+      jobsFound: jobResults.length,
+      companiesFound: results.companiesStored,
+      newCompanies: results.newCompanies,
+      leadsCreated: results.leadsCreated,
+      companyIdMap: results.companyIdMap,
+    };
+  } catch (error) {
+    const duration = Math.round((Date.now() - startTime) / 1000);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+
+    // Update scraper run with error
+    await db
+      .update(scraperRuns)
+      .set({
+        status: "failed",
+        duration,
+        errorMessage,
+        completedAt: new Date(),
+      })
+      .where(eq(scraperRuns.id, scraperRunId));
+
+    console.error(`[Search Run] Scraper ${scraperIndex} failed:`, error);
+
+    return {
+      scraperRunId,
+      jobsFound: 0,
+      companiesFound: 0,
+      newCompanies: 0,
+      leadsCreated: 0,
+      companyIdMap: existingCompanyMap,
+      error: errorMessage,
+    };
+  }
+}
+
+// POST /api/searches/[id]/run - Execute scrapers and store results
 export async function POST(req: Request, { params }: RouteContext) {
   try {
     console.log("[Search Run] Starting search execution...");
     const { orgId } = await requireOrgAuth();
     const { id } = await params;
     console.log("[Search Run] Org ID:", orgId, "Search ID:", id);
+
+    // Get optional scraper index from body
+    const body = await req.json().catch(() => ({}));
+    const { scraperIndex: targetScraperIndex } = body as { scraperIndex?: number };
 
     // Get the search
     const search = await db.query.searches.findFirst({
@@ -45,165 +480,149 @@ export async function POST(req: Request, { params }: RouteContext) {
     }
     console.log("[Search Run] Found search:", search.name);
 
-    // Build Apify input from search filters
-    const filters = search.filters as {
-      jobTitles?: string[];
-      locations?: string[];
-      companyNames?: string[];
-      companyIds?: string[];
-      keywords?: string[];
-      rows?: number;
-      publishedAt?: string;
-    } | null;
+    const filters = search.filters as SearchFilters | null;
+    const scrapers = filters?.scrapers || [];
+    const maxRows = filters?.maxRows || 100;
 
-    const apifyInput: LinkedInJobsInput = {
-      title: filters?.jobTitles?.join(" OR ") || filters?.keywords?.join(" OR ") || "",
-      location: filters?.locations?.[0] || "",
-      companyName: filters?.companyNames || [],
-      companyId: filters?.companyIds || [],
-      rows: filters?.rows || 100,
-      publishedAt: filters?.publishedAt,
-    };
-    console.log("[Search Run] Apify input:", JSON.stringify(apifyInput, null, 2));
+    // If no scrapers configured, fall back to legacy behavior
+    if (scrapers.length === 0) {
+      console.log("[Search Run] No scrapers configured, using legacy job titles");
 
-    // Run the LinkedIn Jobs search
-    console.log("[Search Run] Starting Apify actor... (this may take a few minutes)");
-    const jobResults = await runLinkedInJobsSearch(apifyInput);
-    console.log("[Search Run] Apify returned", jobResults.length, "jobs");
+      // Create a single scraper from legacy config
+      const legacyScraper: ScraperConfig = {
+        jobTitle: filters?.jobTitles?.join(" OR ") || filters?.keywords?.join(" OR ") || "",
+        location: filters?.locations?.[0] || "",
+        experienceLevel: "any",
+      };
 
-    // Extract unique companies from results
-    const extractedCompanies = extractCompaniesFromJobs(jobResults);
+      if (!legacyScraper.jobTitle) {
+        return NextResponse.json(
+          { error: "No scrapers or job titles configured" },
+          { status: 400 }
+        );
+      }
 
-    // Store companies in database and track their IDs
-    const companyIdMap = new Map<string, string>(); // companyName -> companyId
-    const insertedCompanies = [];
+      scrapers.push(legacyScraper);
+    }
 
-    for (const company of extractedCompanies) {
-      const [inserted] = await db
-        .insert(companies)
-        .values({
-          orgId,
-          searchId: id,
-          name: company.name,
-          linkedinUrl: company.linkedinUrl,
-          logoUrl: company.logoUrl,
-          metadata: {
-            linkedinId: company.linkedinId,
-            jobCount: company.jobCount,
-          },
-        })
-        .onConflictDoNothing()
-        .returning();
+    // Determine which scrapers to run
+    const scrapersToRun = targetScraperIndex !== undefined
+      ? [{ scraper: scrapers[targetScraperIndex], index: targetScraperIndex }]
+      : scrapers.map((scraper, index) => ({ scraper, index }));
 
-      if (inserted) {
-        insertedCompanies.push(inserted);
-        companyIdMap.set(company.name.toLowerCase(), inserted.id);
+    if (targetScraperIndex !== undefined && !scrapers[targetScraperIndex]) {
+      return NextResponse.json(
+        { error: `Scraper at index ${targetScraperIndex} not found` },
+        { status: 400 }
+      );
+    }
+
+    console.log(`[Search Run] Running ${scrapersToRun.length} scraper(s)`);
+
+    // Run scrapers sequentially, sharing company deduplication
+    let totalJobsFound = 0;
+    let totalCompaniesFound = 0;
+    let totalNewCompanies = 0;
+    let totalLeadsCreated = 0;
+    let totalCancelled = 0;
+    let companyIdMap = new Map<string, string>();
+    const scraperResults: Array<{
+      scraperIndex: number;
+      scraperConfig: ScraperConfig;
+      scraperRunId: string;
+      jobsFound: number;
+      newCompanies: number;
+      leadsCreated: number;
+      error?: string;
+      cancelled?: boolean;
+    }> = [];
+
+    // If running multiple scrapers, create all as "queued" first so users can see them
+    const queuedRunIds: Map<number, string> = new Map();
+
+    if (scrapersToRun.length > 1) {
+      console.log(`[Search Run] Creating ${scrapersToRun.length} queued scraper runs`);
+
+      for (const { scraper, index } of scrapersToRun) {
+        const [queuedRun] = await db
+          .insert(scraperRuns)
+          .values({
+            searchId: id,
+            orgId,
+            scraperIndex: index,
+            scraperConfig: scraper,
+            status: "queued",
+          })
+          .returning();
+
+        queuedRunIds.set(index, queuedRun.id);
+      }
+
+      console.log(`[Search Run] Created ${queuedRunIds.size} queued runs`);
+    }
+
+    // Now run scrapers sequentially
+    for (const { scraper, index } of scrapersToRun) {
+      const existingRunId = queuedRunIds.get(index);
+
+      const result = await runSingleScraper(
+        scraper,
+        index,
+        orgId,
+        id,
+        maxRows,
+        companyIdMap,
+        existingRunId
+      );
+
+      if (result.cancelled) {
+        totalCancelled++;
+      } else {
+        totalJobsFound += result.jobsFound;
+        totalCompaniesFound = result.companiesFound;
+        totalNewCompanies += result.newCompanies;
+        totalLeadsCreated += result.leadsCreated;
+      }
+      companyIdMap = result.companyIdMap;
+
+      scraperResults.push({
+        scraperIndex: index,
+        scraperConfig: scraper,
+        scraperRunId: result.scraperRunId,
+        jobsFound: result.jobsFound,
+        newCompanies: result.newCompanies,
+        leadsCreated: result.leadsCreated,
+        error: result.error,
+        cancelled: result.cancelled,
+      });
+
+      // Small delay between scrapers to avoid rate limiting
+      if (scrapersToRun.length > 1 && !result.cancelled) {
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
-    console.log("[Search Run] Stored", insertedCompanies.length, "companies");
 
-    // Store jobs in database
-    let jobsStored = 0;
-    for (const job of jobResults) {
-      if (!job.companyName) continue;
-
-      const companyId = companyIdMap.get(job.companyName.toLowerCase());
-      if (!companyId) continue;
-
-      try {
-        // Categorize job and extract tech stack
-        const department = categorizeJob(job.title);
-        const techStack = extractTechStack(job.description);
-
-        await db.insert(jobs).values({
-          orgId,
-          companyId,
-          searchId: id,
-          externalId: job.id?.toString(),
-          title: job.title,
-          jobUrl: job.jobUrl,
-          location: job.location,
-          salary: job.salary,
-          contractType: job.contractType,
-          experienceLevel: job.experienceLevel,
-          workType: job.workType,
-          sector: job.sector,
-          department,
-          techStack,
-          description: job.description,
-          postedTime: job.postedTime,
-          publishedAt: job.publishedAt ? new Date(job.publishedAt) : null,
-          applicationsCount: job.applicationsCount,
-          applyUrl: job.applyUrl,
-          applyType: job.applyType,
-          posterName: job.posterFullName,
-          posterUrl: job.posterProfileUrl,
-        }).onConflictDoNothing();
-        jobsStored++;
-      } catch (err) {
-        console.error("[Search Run] Error storing job:", err);
-      }
-    }
-    console.log("[Search Run] Stored", jobsStored, "jobs");
-
-    // Create leads from job posters
-    let leadsCreated = 0;
-    const seenPosterUrls = new Set<string>(); // Track unique posters by LinkedIn URL
-
-    for (const job of jobResults) {
-      // Skip if no poster info or already processed this poster
-      if (!job.posterFullName || !job.posterProfileUrl) continue;
-      if (seenPosterUrls.has(job.posterProfileUrl)) continue;
-      seenPosterUrls.add(job.posterProfileUrl);
-
-      if (!job.companyName) continue;
-      const companyId = companyIdMap.get(job.companyName.toLowerCase());
-      if (!companyId) continue;
-
-      try {
-        const { firstName, lastName } = parseFullName(job.posterFullName);
-
-        await db.insert(leads).values({
-          orgId,
-          companyId,
-          searchId: id,
-          firstName,
-          lastName,
-          linkedinUrl: job.posterProfileUrl,
-          jobTitle: "Job Poster", // Default title since we don't have their actual title
-          status: "new",
-          metadata: {
-            source: "linkedin_job_poster",
-            jobTitle: job.title,
-            jobUrl: job.jobUrl,
-          },
-        }).onConflictDoNothing();
-        leadsCreated++;
-      } catch (err) {
-        console.error("[Search Run] Error creating lead:", err);
-      }
-    }
-    console.log("[Search Run] Created", leadsCreated, "leads from job posters");
-
-    // Update search with results count and last run time
+    // Update search with aggregated results
     await db
       .update(searches)
       .set({
-        resultsCount: insertedCompanies.length,
-        jobsCount: jobsStored,
+        resultsCount: sql`COALESCE(${searches.resultsCount}, 0) + ${totalNewCompanies}`,
+        jobsCount: sql`COALESCE(${searches.jobsCount}, 0) + ${totalJobsFound}`,
         lastRunAt: new Date(),
         updatedAt: new Date(),
       })
       .where(eq(searches.id, id));
 
+    console.log(`[Search Run] Completed: ${totalJobsFound} jobs, ${totalNewCompanies} new companies, ${totalLeadsCreated} leads`);
+
     return NextResponse.json({
       success: true,
-      jobsFound: jobResults.length,
-      companiesFound: extractedCompanies.length,
-      companiesStored: insertedCompanies.length,
-      jobsStored,
-      leadsCreated,
-      companies: insertedCompanies,
+      scrapersRun: scrapersToRun.length,
+      totalJobsFound,
+      totalCompaniesFound,
+      totalNewCompanies,
+      totalLeadsCreated,
+      scraperResults,
     });
   } catch (error) {
     console.error("Error running search:", error);

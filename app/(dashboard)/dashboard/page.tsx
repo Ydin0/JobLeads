@@ -1,121 +1,86 @@
 'use client'
 
+import { useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
-    Users,
+    Target,
     Building2,
-    Search,
-    Briefcase,
-    ArrowUpRight,
     Plus,
-    ExternalLink,
     Sparkles,
     CheckCircle2,
+    UserPlus,
     Clock,
-    ChevronRight,
-    Mail,
-    Linkedin,
-    MapPin,
-    Calendar,
-    TrendingUp,
     Loader2,
+    Users,
+    Crown,
+    Mail,
+    TrendingUp,
+    Lightbulb,
+    ArrowRight,
+    AlertCircle,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useSearches } from '@/hooks/use-searches'
 import { useCompanies } from '@/hooks/use-companies'
 import { useLeads } from '@/hooks/use-leads'
+import { useCredits } from '@/hooks/use-credits'
+import { useUser, useOrganization } from '@clerk/nextjs'
 
 interface CompanyMetadata {
     linkedinId?: string
     jobCount?: number
-    jobs?: {
-        id: string
-        title: string
-        url: string
-        location: string
-        publishedAt: string
-    }[]
-}
-
-interface SearchFilters {
-    jobTitles?: string[]
-    locations?: string[]
-    companyNames?: string[]
 }
 
 export default function DashboardPage() {
     const { searches, isLoading: searchesLoading } = useSearches()
     const { companies, isLoading: companiesLoading } = useCompanies()
     const { leads, isLoading: leadsLoading } = useLeads()
-
-    const isLoading = searchesLoading || companiesLoading || leadsLoading
-
-    // Calculate total jobs from companies metadata
-    const totalJobs = companies.reduce((acc, c) => {
-        const metadata = c.metadata as CompanyMetadata | null
-        return acc + (metadata?.jobCount || 0)
-    }, 0)
-
-    const stats = [
-        {
-            name: 'Companies Found',
-            value: companies.length,
-            change: `${companies.filter(c => c.isEnriched).length} enriched`,
-            changeType: companies.filter(c => c.isEnriched).length > 0 ? 'positive' : 'neutral',
-            icon: Building2,
-            color: 'from-blue-500 to-cyan-500',
+    const { enrichmentRemaining, icpRemaining, isLoading: creditsLoading } = useCredits()
+    const { user } = useUser()
+    const { memberships } = useOrganization({
+        memberships: {
+            infinite: true,
         },
-        {
-            name: 'Open Positions',
-            value: totalJobs,
-            change: `From ${companies.length} companies`,
-            changeType: totalJobs > 0 ? 'positive' : 'neutral',
-            icon: Briefcase,
-            color: 'from-purple-500 to-pink-500',
-        },
-        {
-            name: 'Contacts Found',
-            value: leads.length,
-            change: `${leads.filter(l => l.status === 'new').length} new`,
-            changeType: leads.filter(l => l.status === 'new').length > 0 ? 'positive' : 'neutral',
-            icon: Users,
-            color: 'from-green-500 to-emerald-500',
-        },
-        {
-            name: 'Active Searches',
-            value: searches.filter(s => s.status === 'active').length,
-            change: `${searches.length} total`,
-            changeType: 'neutral',
-            icon: Search,
-            color: 'from-orange-500 to-amber-500',
-        },
-    ]
+    })
 
-    // Get recent companies (top 5 by job count)
-    const recentCompanies = [...companies]
-        .sort((a, b) => {
-            const aJobs = (a.metadata as CompanyMetadata | null)?.jobCount || 0
-            const bJobs = (b.metadata as CompanyMetadata | null)?.jobCount || 0
-            return bJobs - aJobs
-        })
-        .slice(0, 5)
+    const isLoading = searchesLoading || companiesLoading || leadsLoading || creditsLoading
 
-    // Get recent leads (top 4 by created date)
-    const recentLeads = [...leads]
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 4)
+    // ICPs are searches in this app
+    const icps = searches
 
-    // Get active searches
-    const activeSearches = searches.slice(0, 3)
+    // Calculate stats
+    const totalCompanies = companies.length
+    const totalContacts = leads.length
+    const activeSearches = searches.filter(s => s.status === 'active').length
 
-    const formatDate = (date: Date | string | null) => {
+    // Credits from API
+    const enrichmentCreditsRemaining = enrichmentRemaining
+    const icpCreditsRemaining = icpRemaining
+
+    // Get recent activity from leads and searches
+    const recentActivity = generateRecentActivity(leads, searches, companies)
+
+    // Generate AI suggestions based on real data
+    const aiSuggestions = useMemo(() => generateAISuggestions(
+        companies,
+        leads,
+        searches,
+        { enrichmentRemaining: enrichmentCreditsRemaining, icpRemaining: icpCreditsRemaining }
+    ), [companies, leads, searches, enrichmentCreditsRemaining, icpCreditsRemaining])
+
+    // Get team members
+    const teamMembers = memberships?.data || []
+
+    const formatTimeAgo = (date: Date | string | null) => {
         if (!date) return 'Never'
         const d = new Date(date)
         const now = new Date()
         const diff = now.getTime() - d.getTime()
-        const hours = Math.floor(diff / (1000 * 60 * 60))
-        if (hours < 1) return 'Just now'
+        const minutes = Math.floor(diff / (1000 * 60))
+        if (minutes < 1) return 'Just now'
+        if (minutes < 60) return `${minutes}m ago`
+        const hours = Math.floor(minutes / 60)
         if (hours < 24) return `${hours}h ago`
         const days = Math.floor(hours / 24)
         if (days < 7) return `${days}d ago`
@@ -131,332 +96,456 @@ export default function DashboardPage() {
     }
 
     return (
-        <div className="space-y-4">
+        <div className="flex min-h-[calc(100vh-120px)] flex-col gap-5">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-xl font-semibold text-black dark:text-white">Dashboard</h1>
-                    <p className="text-sm text-black/40 dark:text-white/40">Overview of your lead generation activity</p>
+                    <h1 className="text-lg font-semibold text-black dark:text-white">Dashboard</h1>
+                    <p className="text-sm text-black/50 dark:text-white/50">
+                        Overview of your lead generation pipeline
+                    </p>
                 </div>
-                <Button size="sm" className="h-8 !border-0 !ring-0 bg-gradient-to-r from-orange-500 to-red-500 px-3 text-sm text-white shadow-lg shadow-orange-500/25 hover:from-orange-600 hover:to-red-600 dark:from-purple-500 dark:to-blue-500 dark:shadow-purple-500/25 dark:hover:from-purple-600 dark:hover:to-blue-600" asChild>
-                    <Link href="/dashboard/searches">
-                        <Plus className="mr-1.5 size-3.5" />
-                        New Search
-                    </Link>
-                </Button>
+                <Link href="/dashboard/icps/new">
+                    <Button className="h-9 rounded-full bg-black px-4 text-sm font-medium text-white hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/90">
+                        <Plus className="mr-2 size-4" />
+                        Create New ICP
+                    </Button>
+                </Link>
             </div>
 
-            {/* Stats Grid */}
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {stats.map((stat) => (
-                    <div
-                        key={stat.name}
-                        className="relative overflow-hidden rounded-xl border border-black/5 bg-black/[0.02] p-3 backdrop-blur-sm dark:border-white/5 dark:bg-white/[0.02]">
-                        <div className="absolute -right-4 -top-4 size-16 rounded-full bg-gradient-to-br opacity-10 blur-xl" />
-                        <div className="relative flex items-center gap-3">
-                            <div className={cn(
-                                'flex size-8 items-center justify-center rounded-lg bg-gradient-to-br shadow-lg',
-                                stat.color
-                            )}>
-                                <stat.icon className="size-4 text-white" />
-                            </div>
-                            <div className="flex-1">
-                                <div className="flex items-center justify-between">
-                                    <div className="text-2xl font-semibold text-black dark:text-white">{stat.value}</div>
-                                    <div className="flex items-center gap-0.5 text-xs font-medium">
-                                        {stat.changeType === 'positive' && (
-                                            <ArrowUpRight className="size-3 text-green-400" />
-                                        )}
-                                        <span className={stat.changeType === 'positive' ? 'text-green-400' : 'text-black/40 dark:text-white/40'}>
-                                            {stat.change}
-                                        </span>
-                                    </div>
-                                </div>
-                                <div className="text-sm text-black/40 dark:text-white/40">{stat.name}</div>
-                            </div>
+            {/* Stats Row */}
+            <div className="flex items-center gap-6 border-b border-black/5 pb-5 dark:border-white/5">
+                <div>
+                    <div className="text-2xl font-semibold text-black dark:text-white">{icps.length}</div>
+                    <div className="mt-0.5 text-xs text-black/50 dark:text-white/50">ICPs</div>
+                </div>
+                <div className="h-8 w-px bg-black/10 dark:bg-white/10" />
+                <div>
+                    <div className="text-2xl font-semibold text-black dark:text-white">{totalCompanies}</div>
+                    <div className="mt-0.5 text-xs text-black/50 dark:text-white/50">Companies</div>
+                </div>
+                <div className="h-8 w-px bg-black/10 dark:bg-white/10" />
+                <div>
+                    <div className="text-2xl font-semibold text-black dark:text-white">{totalContacts}</div>
+                    <div className="mt-0.5 text-xs text-black/50 dark:text-white/50">Contacts</div>
+                </div>
+            </div>
+
+            {/* Main Content - Two column layout that fills viewport */}
+            <div className="grid flex-1 gap-5 lg:grid-cols-[1fr_300px]">
+                {/* Left Column - ICP Pipeline + AI Suggestions */}
+                <div className="flex flex-col gap-5">
+                    {/* ICP Pipeline */}
+                    <div>
+                        <div className="mb-3 flex items-center justify-between">
+                            <h2 className="text-sm font-medium text-black dark:text-white">ICP Pipeline</h2>
+                            <Link
+                                href="/dashboard/icps"
+                                className="text-xs text-black/40 hover:text-black dark:text-white/40 dark:hover:text-white"
+                            >
+                                View all
+                            </Link>
                         </div>
-                    </div>
-                ))}
-            </div>
 
-            <div className="grid gap-4 lg:grid-cols-3">
-                {/* Recent Companies */}
-                <div className="lg:col-span-2 relative overflow-hidden rounded-xl border border-black/5 bg-black/[0.02] backdrop-blur-sm dark:border-white/5 dark:bg-white/[0.02]">
-                    <div className="absolute -left-20 -top-20 size-40 rounded-full bg-blue-500/5 blur-3xl" />
-                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/10 to-transparent dark:via-white/10" />
-                    <div className="relative flex items-center justify-between border-b border-black/5 px-4 py-3 dark:border-white/5">
-                        <h2 className="text-sm font-medium text-black dark:text-white">Recent Companies</h2>
-                        <Link
-                            href="/dashboard/companies"
-                            className="flex items-center gap-1 text-xs text-black/40 transition-colors hover:text-black dark:text-white/40 dark:hover:text-white">
-                            View all
-                            <ExternalLink className="size-3" />
-                        </Link>
-                    </div>
-                    <div className="relative p-3">
-                        {recentCompanies.length > 0 ? (
-                            <div className="space-y-1.5">
-                                {recentCompanies.map((company) => {
-                                    const metadata = company.metadata as CompanyMetadata | null
-                                    const jobCount = metadata?.jobCount || 0
-
-                                    return (
-                                        <div
-                                            key={company.id}
-                                            className="group flex items-center justify-between rounded-lg border border-black/5 bg-black/[0.02] px-3 py-2.5 transition-all hover:border-black/10 hover:bg-black/[0.04] dark:border-white/5 dark:bg-white/[0.02] dark:hover:border-white/10 dark:hover:bg-white/[0.04]">
-                                            <div className="flex items-center gap-3">
-                                                {company.logoUrl ? (
-                                                    <img
-                                                        src={company.logoUrl}
-                                                        alt={company.name}
-                                                        className="size-8 rounded-lg object-cover"
-                                                    />
-                                                ) : (
-                                                    <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-black/10 to-black/5 text-xs font-medium text-black ring-1 ring-inset ring-black/10 dark:from-white/10 dark:to-white/5 dark:text-white dark:ring-white/10">
-                                                        {company.name.charAt(0)}
-                                                    </div>
-                                                )}
-                                                <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-sm font-medium text-black dark:text-white">{company.name}</span>
-                                                        {company.industry && (
-                                                            <span className="rounded bg-black/10 px-1.5 py-0.5 text-xs text-black/40 dark:bg-white/10 dark:text-white/40">{company.industry}</span>
-                                                        )}
-                                                    </div>
-                                                    <div className="mt-0.5 flex items-center gap-3 text-xs text-black/30 dark:text-white/30">
-                                                        <span className="flex items-center gap-1">
-                                                            <Briefcase className="size-3" />
-                                                            {jobCount} jobs
-                                                        </span>
-                                                        {company.location && (
-                                                            <span className="flex items-center gap-1">
-                                                                <MapPin className="size-3" />
-                                                                {company.location}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
+                        {icps.length > 0 ? (
+                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                                {icps.slice(0, 6).map((icp) => (
+                                    <Link
+                                        key={icp.id}
+                                        href={`/dashboard/icps/${icp.id}`}
+                                        className="rounded-xl border border-black/10 bg-white p-4 transition-colors hover:border-black/20 dark:border-white/10 dark:bg-white/[0.02] dark:hover:border-white/20"
+                                    >
+                                        <div className="flex items-start gap-3">
+                                            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-black/5 dark:bg-white/5">
+                                                <Target className="size-5 text-black/60 dark:text-white/60" />
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                {company.isEnriched ? (
-                                                    <span className="flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-400 ring-1 ring-inset ring-green-500/20">
-                                                        <CheckCircle2 className="size-3" />
-                                                        Enriched
-                                                    </span>
-                                                ) : (
-                                                    <Button
-                                                        size="sm"
-                                                        className="h-7 bg-gradient-to-r from-purple-500 to-blue-500 px-2.5 text-xs text-white hover:from-purple-600 hover:to-blue-600">
-                                                        <Sparkles className="mr-1 size-3" />
-                                                        Enrich
-                                                    </Button>
-                                                )}
-                                                <ChevronRight className="size-4 text-black/20 dark:text-white/20" />
+                                            <div className="min-w-0 flex-1">
+                                                <h3 className="text-sm font-medium text-black truncate dark:text-white">{icp.name}</h3>
+                                                <p className="text-xs text-black/40 dark:text-white/40">
+                                                    {formatTimeAgo(icp.lastRunAt)}
+                                                </p>
                                             </div>
                                         </div>
-                                    )
-                                })}
+                                        <div className="mt-3 flex items-center gap-3 text-xs">
+                                            <div className="flex items-center gap-1">
+                                                <Building2 className="size-3 text-black/30 dark:text-white/30" />
+                                                <span className="font-medium text-black dark:text-white">{icp.resultsCount || 0}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <Users className="size-3 text-black/30 dark:text-white/30" />
+                                                <span className="font-medium text-black dark:text-white">{icp.jobsCount || 0}</span>
+                                            </div>
+                                            <span className={cn(
+                                                "ml-auto rounded-full px-2 py-0.5 text-[10px] font-medium",
+                                                icp.status === 'active'
+                                                    ? "bg-green-100 text-green-600 dark:bg-green-500/20 dark:text-green-400"
+                                                    : "bg-black/5 text-black/50 dark:bg-white/10 dark:text-white/50"
+                                            )}>
+                                                {icp.status}
+                                            </span>
+                                        </div>
+                                    </Link>
+                                ))}
                             </div>
                         ) : (
-                            <div className="flex flex-col items-center justify-center py-8 text-center">
-                                <div className="flex size-10 items-center justify-center rounded-full bg-black/5 dark:bg-white/5">
-                                    <Building2 className="size-4 text-black/30 dark:text-white/30" />
+                            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-black/10 bg-black/[0.01] py-16 text-center dark:border-white/10 dark:bg-white/[0.01]">
+                                <div className="flex size-12 items-center justify-center rounded-full bg-black/5 dark:bg-white/5">
+                                    <Target className="size-6 text-black/30 dark:text-white/30" />
                                 </div>
-                                <p className="mt-2 text-sm text-black/40 dark:text-white/40">No companies found yet</p>
-                                <p className="text-xs text-black/30 dark:text-white/30">Run a search to discover companies</p>
+                                <p className="mt-4 text-sm font-medium text-black/60 dark:text-white/60">No ICPs yet</p>
+                                <p className="mt-1 text-xs text-black/40 dark:text-white/40">Create your first ICP to start finding leads</p>
                             </div>
                         )}
                     </div>
+
+                    {/* AI Suggestions - Fills remaining space with gradient border */}
+                    <div className="flex-1 rounded-2xl bg-gradient-to-r from-rose-200 via-purple-200 to-violet-300 p-[2px] dark:from-rose-400/40 dark:via-purple-400/40 dark:to-violet-400/40">
+                        <div className="h-full rounded-[14px] bg-white dark:bg-[#0a0a0f]">
+                            <div className="flex items-center gap-2 border-b border-black/5 px-4 py-3 dark:border-white/5">
+                                <Sparkles className="size-4 text-violet-500" />
+                                <h2 className="text-sm font-medium text-black dark:text-white">AI Suggestions</h2>
+                                <span className="ml-1 rounded-full bg-gradient-to-r from-rose-100 to-violet-100 px-1.5 py-0.5 text-[9px] font-medium text-violet-600 dark:from-rose-500/20 dark:to-violet-500/20 dark:text-violet-400">
+                                    Pro
+                                </span>
+                            </div>
+                        <div className="p-4">
+                            {aiSuggestions.length > 0 ? (
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    {aiSuggestions.map((suggestion, index) => (
+                                        <div
+                                            key={index}
+                                            className={cn(
+                                                "flex items-start gap-3 rounded-xl border p-4 transition-colors",
+                                                suggestion.priority === 'high'
+                                                    ? "border-black/20 bg-black/[0.02] dark:border-white/20 dark:bg-white/[0.02]"
+                                                    : "border-black/5 bg-black/[0.01] hover:border-black/10 dark:border-white/5 dark:bg-white/[0.01] dark:hover:border-white/10"
+                                            )}
+                                        >
+                                            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-black/5 dark:bg-white/5">
+                                                {suggestion.type === 'action' && <ArrowRight className="size-4 text-black/60 dark:text-white/60" />}
+                                                {suggestion.type === 'insight' && <TrendingUp className="size-4 text-black/60 dark:text-white/60" />}
+                                                {suggestion.type === 'tip' && <Lightbulb className="size-4 text-black/60 dark:text-white/60" />}
+                                                {suggestion.type === 'warning' && <AlertCircle className="size-4 text-black/60 dark:text-white/60" />}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <p className="text-sm font-medium text-black dark:text-white">{suggestion.title}</p>
+                                                    {suggestion.priority === 'high' && (
+                                                        <span className="shrink-0 rounded-full bg-black px-1.5 py-0.5 text-[9px] font-medium text-white dark:bg-white dark:text-black">
+                                                            Priority
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="mt-1 text-xs leading-relaxed text-black/50 dark:text-white/50">{suggestion.description}</p>
+                                                {suggestion.action && (
+                                                    <Link
+                                                        href={suggestion.action.href}
+                                                        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-black hover:underline dark:text-white"
+                                                    >
+                                                        {suggestion.action.label}
+                                                        <ArrowRight className="size-3" />
+                                                    </Link>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-12 text-center">
+                                    <Sparkles className="size-8 text-black/20 dark:text-white/20" />
+                                    <p className="mt-3 text-sm font-medium text-black/60 dark:text-white/60">No suggestions yet</p>
+                                    <p className="mt-1 text-xs text-black/40 dark:text-white/40">Add ICPs and companies to get AI recommendations</p>
+                                </div>
+                            )}
+                        </div>
+                        </div>
+                    </div>
                 </div>
 
-                {/* Recent Contacts */}
-                <div className="relative overflow-hidden rounded-xl border border-black/5 bg-black/[0.02] backdrop-blur-sm dark:border-white/5 dark:bg-white/[0.02]">
-                    <div className="absolute -right-20 -top-20 size-40 rounded-full bg-purple-500/5 blur-3xl" />
-                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/10 to-transparent dark:via-white/10" />
-                    <div className="relative flex items-center justify-between border-b border-black/5 px-4 py-3 dark:border-white/5">
-                        <h2 className="text-sm font-medium text-black dark:text-white">Recent Contacts</h2>
-                        <Link
-                            href="/dashboard/leads"
-                            className="flex items-center gap-1 text-xs text-black/40 transition-colors hover:text-black dark:text-white/40 dark:hover:text-white">
-                            View all
-                            <ExternalLink className="size-3" />
-                        </Link>
-                    </div>
-                    <div className="relative p-3">
-                        {recentLeads.length > 0 ? (
-                            <div className="space-y-1.5">
-                                {recentLeads.map((lead) => (
-                                    <div
-                                        key={lead.id}
-                                        className="group rounded-lg border border-black/5 bg-black/[0.02] p-2.5 transition-all hover:border-black/10 hover:bg-black/[0.04] dark:border-white/5 dark:bg-white/[0.02] dark:hover:border-white/10 dark:hover:bg-white/[0.04]">
-                                        <div className="flex items-center gap-2.5">
-                                            <div className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-purple-500/20 to-blue-500/20 text-xs font-medium text-black ring-1 ring-inset ring-black/10 dark:text-white dark:ring-white/10">
-                                                {lead.firstName?.charAt(0) || ''}{lead.lastName?.charAt(0) || ''}
-                                            </div>
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="text-sm font-medium text-black truncate dark:text-white">
-                                                        {lead.firstName} {lead.lastName}
-                                                    </span>
-                                                    <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ${
-                                                        lead.status === 'new'
-                                                            ? 'bg-green-500/10 text-green-400 ring-green-500/20'
-                                                            : lead.status === 'contacted'
-                                                            ? 'bg-blue-500/10 text-blue-400 ring-blue-500/20'
-                                                            : 'bg-purple-500/10 text-purple-400 ring-purple-500/20'
-                                                    }`}>
-                                                        {lead.status}
-                                                    </span>
-                                                </div>
-                                                <div className="text-xs text-black/40 truncate dark:text-white/40">{lead.jobTitle || 'No title'}</div>
-                                            </div>
+                {/* Right Column - Recent Activity + Team */}
+                <div className="flex flex-col gap-5">
+                    {/* Recent Activity Feed - Fills available space */}
+                    <div className="flex-1 rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.02]">
+                        <div className="border-b border-black/5 px-4 py-3 dark:border-white/5">
+                            <h2 className="text-sm font-medium text-black dark:text-white">Recent Activity</h2>
+                        </div>
+                        {recentActivity.length > 0 ? (
+                            <div className="divide-y divide-black/5 dark:divide-white/5">
+                                {recentActivity.slice(0, 8).map((activity) => (
+                                    <div key={activity.id} className="flex items-start gap-3 px-4 py-3">
+                                        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-black/5 dark:bg-white/5">
+                                            {activity.type === 'search_completed' && <CheckCircle2 className="size-4 text-black/60 dark:text-white/60" />}
+                                            {activity.type === 'companies_enriched' && <Sparkles className="size-4 text-black/60 dark:text-white/60" />}
+                                            {activity.type === 'leads_added' && <UserPlus className="size-4 text-black/60 dark:text-white/60" />}
                                         </div>
-                                        <div className="mt-2 flex items-center justify-between">
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="text-xs text-black/30 dark:text-white/30">{formatDate(lead.createdAt)}</span>
-                                            </div>
-                                            <div className="flex items-center gap-1.5">
-                                                {lead.email && <Mail className="size-3.5 text-black/30 dark:text-white/30" />}
-                                                {lead.linkedinUrl && <Linkedin className="size-3.5 text-blue-400/60" />}
-                                            </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-black dark:text-white">{activity.title}</p>
+                                            <p className="text-xs text-black/40 dark:text-white/40 truncate">
+                                                {activity.description}
+                                            </p>
                                         </div>
+                                        <span className="shrink-0 text-xs text-black/40 dark:text-white/40">
+                                            {formatTimeAgo(activity.timestamp)}
+                                        </span>
                                     </div>
                                 ))}
                             </div>
                         ) : (
-                            <div className="flex flex-col items-center justify-center py-8 text-center">
-                                <div className="flex size-10 items-center justify-center rounded-full bg-black/5 dark:bg-white/5">
-                                    <Users className="size-4 text-black/30 dark:text-white/30" />
-                                </div>
-                                <p className="mt-2 text-sm text-black/40 dark:text-white/40">No contacts yet</p>
-                                <p className="text-xs text-black/30 dark:text-white/30">Enrich companies to find contacts</p>
+                            <div className="flex flex-col items-center justify-center py-12 text-center">
+                                <Clock className="size-6 text-black/20 dark:text-white/20" />
+                                <p className="mt-2 text-sm text-black/40 dark:text-white/40">No recent activity</p>
                             </div>
                         )}
-                        <Link
-                            href="/dashboard/companies"
-                            className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-black/10 py-2.5 text-xs text-black/40 transition-colors hover:border-black/20 hover:text-black/60 dark:border-white/10 dark:text-white/40 dark:hover:border-white/20 dark:hover:text-white/60">
-                            <Sparkles className="size-3.5" />
-                            Enrich companies to find contacts
-                        </Link>
                     </div>
-                </div>
-            </div>
 
-            {/* Active Searches */}
-            <div className="relative overflow-hidden rounded-xl border border-black/5 bg-black/[0.02] backdrop-blur-sm dark:border-white/5 dark:bg-white/[0.02]">
-                <div className="absolute -right-32 -top-32 size-64 rounded-full bg-orange-500/5 blur-3xl" />
-                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/10 to-transparent dark:via-white/10" />
-                <div className="relative flex items-center justify-between border-b border-black/5 px-4 py-3 dark:border-white/5">
-                    <h2 className="text-sm font-medium text-black dark:text-white">Your Searches</h2>
-                    <Link
-                        href="/dashboard/searches"
-                        className="flex items-center gap-1 text-xs text-black/40 transition-colors hover:text-black dark:text-white/40 dark:hover:text-white">
-                        Manage
-                        <ExternalLink className="size-3" />
-                    </Link>
-                </div>
-                <div className="relative p-3">
-                    {activeSearches.length > 0 ? (
-                        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                            {activeSearches.map((search) => {
-                                const filters = search.filters as SearchFilters | null
+                    {/* Team Section */}
+                    <div className="rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.02]">
+                        <div className="flex items-center justify-between border-b border-black/5 px-4 py-3 dark:border-white/5">
+                            <h2 className="text-sm font-medium text-black dark:text-white">Team</h2>
+                            <Link
+                                href="/dashboard/settings"
+                                className="text-xs text-black/40 hover:text-black dark:text-white/40 dark:hover:text-white"
+                            >
+                                Manage
+                            </Link>
+                        </div>
+                        <div className="p-4">
+                            <div className="flex items-center gap-3">
+                                <div className="flex size-10 items-center justify-center rounded-full bg-black text-sm font-medium text-white dark:bg-white dark:text-black">
+                                    {user?.firstName?.charAt(0) || user?.emailAddresses?.[0]?.emailAddress?.charAt(0) || '?'}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                        <p className="text-sm font-medium text-black truncate dark:text-white">
+                                            {user?.fullName || user?.emailAddresses?.[0]?.emailAddress || 'You'}
+                                        </p>
+                                        <Crown className="size-3.5 text-amber-500" />
+                                    </div>
+                                    <p className="text-xs text-black/40 dark:text-white/40">Owner</p>
+                                </div>
+                            </div>
 
-                                return (
-                                    <div
-                                        key={search.id}
-                                        className="group rounded-lg border border-black/5 bg-black/[0.02] p-3 transition-all hover:border-black/10 hover:bg-black/[0.04] dark:border-white/5 dark:bg-white/[0.02] dark:hover:border-white/10 dark:hover:bg-white/[0.04]">
-                                        <div className="mb-2 flex items-center justify-between">
-                                            <div className="flex items-center gap-1.5">
-                                                <div className="text-sm font-medium text-black truncate dark:text-white">{search.name}</div>
+                            {teamMembers.length > 1 && (
+                                <div className="mt-4 space-y-3">
+                                    {teamMembers.slice(0, 3).filter(m => m.publicUserData?.userId !== user?.id).map((member) => (
+                                        <div key={member.id} className="flex items-center gap-3">
+                                            <div className="flex size-8 items-center justify-center rounded-full bg-black/5 text-xs font-medium text-black/60 dark:bg-white/5 dark:text-white/60">
+                                                {member.publicUserData?.firstName?.charAt(0) || '?'}
                                             </div>
-                                            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ${
-                                                search.status === 'active'
-                                                    ? 'bg-green-500/10 text-green-400 ring-green-500/20'
-                                                    : 'bg-yellow-500/10 text-yellow-400 ring-yellow-500/20'
-                                            }`}>
-                                                {search.status}
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm text-black truncate dark:text-white">
+                                                    {member.publicUserData?.firstName} {member.publicUserData?.lastName}
+                                                </p>
+                                            </div>
+                                            <span className="text-xs text-black/40 dark:text-white/40">
+                                                {member.role}
                                             </span>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-1.5">
-                                            <div className="rounded-md bg-black/5 px-2 py-1.5 text-center dark:bg-white/5">
-                                                <div className="text-sm font-medium text-black dark:text-white">{search.resultsCount || 0}</div>
-                                                <div className="text-[10px] text-black/30 dark:text-white/30">Companies</div>
-                                            </div>
-                                            <div className="rounded-md bg-black/5 px-2 py-1.5 text-center dark:bg-white/5">
-                                                <div className="text-sm font-medium text-black dark:text-white">
-                                                    {filters?.jobTitles?.length || 0}
-                                                </div>
-                                                <div className="text-[10px] text-black/30 dark:text-white/30">Job Titles</div>
-                                            </div>
-                                        </div>
-                                        <div className="mt-2 space-y-0.5">
-                                            <div className="flex items-center justify-between text-xs">
-                                                <span className="flex items-center gap-1 text-black/30 dark:text-white/30">
-                                                    <Clock className="size-3" />
-                                                    Last run
-                                                </span>
-                                                <span className="text-black/50 dark:text-white/50">{formatDate(search.lastRunAt)}</span>
-                                            </div>
-                                            <div className="flex items-center justify-between text-xs">
-                                                <span className="flex items-center gap-1 text-black/30 dark:text-white/30">
-                                                    <Calendar className="size-3" />
-                                                    Created
-                                                </span>
-                                                <span className="text-black/50 dark:text-white/50">{formatDate(search.createdAt)}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center py-8 text-center">
-                            <div className="flex size-10 items-center justify-center rounded-full bg-black/5 dark:bg-white/5">
-                                <Search className="size-4 text-black/30 dark:text-white/30" />
-                            </div>
-                            <p className="mt-2 text-sm text-black/40 dark:text-white/40">No searches yet</p>
-                            <p className="text-xs text-black/30 dark:text-white/30">Create a search to start finding companies</p>
-                            <Link href="/dashboard/searches">
-                                <Button className="mt-3 h-8 !border-0 !ring-0 bg-gradient-to-r from-orange-500 to-red-500 px-3 text-sm text-white shadow-lg shadow-orange-500/25 hover:from-orange-600 hover:to-red-600 dark:from-purple-500 dark:to-blue-500 dark:shadow-purple-500/25 dark:hover:from-purple-600 dark:hover:to-blue-600">
-                                    <Plus className="mr-1.5 size-3.5" />
-                                    Create Search
-                                </Button>
-                            </Link>
-                        </div>
-                    )}
-                </div>
-            </div>
+                                    ))}
+                                </div>
+                            )}
 
-            {/* Quick Actions */}
-            <div className="relative overflow-hidden rounded-xl border border-black/5 bg-black/[0.02] backdrop-blur-sm dark:border-white/5 dark:bg-white/[0.02]">
-                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-black/10 to-transparent dark:via-white/10" />
-                <div className="relative border-b border-black/5 px-4 py-3 dark:border-white/5">
-                    <h2 className="text-sm font-medium text-black dark:text-white">Quick Actions</h2>
-                </div>
-                <div className="relative p-3">
-                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                        {[
-                            { icon: Search, title: 'New Search', desc: 'Start scraping jobs', gradient: 'from-blue-500 to-cyan-500', href: '/dashboard/searches' },
-                            { icon: Sparkles, title: 'Enrich Companies', desc: 'Find key contacts', gradient: 'from-purple-500 to-pink-500', href: '/dashboard/companies' },
-                            { icon: Users, title: 'View Contacts', desc: `${leads.length} contacts`, gradient: 'from-green-500 to-emerald-500', href: '/dashboard/leads' },
-                            { icon: Building2, title: 'View Companies', desc: `${companies.length} companies`, gradient: 'from-orange-500 to-amber-500', href: '/dashboard/companies' },
-                        ].map((action, index) => (
-                            <Link
-                                key={index}
-                                href={action.href}
-                                className="group relative flex items-center gap-3 overflow-hidden rounded-lg border border-black/5 bg-black/[0.02] p-3 text-left transition-all hover:border-black/10 hover:bg-black/[0.04] dark:border-white/5 dark:bg-white/[0.02] dark:hover:border-white/10 dark:hover:bg-white/[0.04]">
-                                <div className={`flex size-10 items-center justify-center rounded-lg bg-gradient-to-br ${action.gradient} shadow-lg transition-transform group-hover:scale-105`}>
-                                    <action.icon className="size-5 text-white" />
-                                </div>
-                                <div>
-                                    <div className="text-sm font-medium text-black dark:text-white">{action.title}</div>
-                                    <div className="text-xs text-black/40 dark:text-white/40">{action.desc}</div>
-                                </div>
-                            </Link>
-                        ))}
+                            <button className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-black/10 py-2.5 text-xs text-black/50 transition-colors hover:border-black/20 hover:text-black/70 dark:border-white/10 dark:text-white/50 dark:hover:border-white/20 dark:hover:text-white/70">
+                                <Mail className="size-3.5" />
+                                Invite team member
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     )
+}
+
+// Helper function to generate activity from existing data
+function generateRecentActivity(
+    leads: Array<{ id: string; firstName: string; lastName: string; createdAt: Date | string }>,
+    searches: Array<{ id: string; name: string; lastRunAt: Date | string | null; resultsCount: number | null }>,
+    companies: Array<{ id: string; name: string; isEnriched: boolean | null; enrichedAt: Date | string | null }>
+) {
+    const activities: Array<{
+        id: string
+        type: 'search_completed' | 'companies_enriched' | 'leads_added'
+        title: string
+        description: string
+        timestamp: Date | string
+    }> = []
+
+    // Add recent lead additions
+    const recentLeads = leads
+        .filter(l => l.createdAt)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 5)
+
+    if (recentLeads.length > 0) {
+        activities.push({
+            id: `leads-${recentLeads[0].id}`,
+            type: 'leads_added',
+            title: `${recentLeads.length} new contact${recentLeads.length > 1 ? 's' : ''}`,
+            description: `${recentLeads[0].firstName} ${recentLeads[0].lastName}${recentLeads.length > 1 ? ` +${recentLeads.length - 1} more` : ''}`,
+            timestamp: recentLeads[0].createdAt,
+        })
+    }
+
+    // Add search completions
+    const recentSearchRuns = searches
+        .filter(s => s.lastRunAt)
+        .sort((a, b) => new Date(b.lastRunAt!).getTime() - new Date(a.lastRunAt!).getTime())
+        .slice(0, 3)
+
+    recentSearchRuns.forEach(search => {
+        activities.push({
+            id: `search-${search.id}`,
+            type: 'search_completed',
+            title: 'Scraper completed',
+            description: `${search.name} · ${search.resultsCount || 0} companies`,
+            timestamp: search.lastRunAt!,
+        })
+    })
+
+    // Add recent enrichments
+    const recentEnrichments = companies
+        .filter(c => c.isEnriched && c.enrichedAt)
+        .sort((a, b) => new Date(b.enrichedAt!).getTime() - new Date(a.enrichedAt!).getTime())
+        .slice(0, 3)
+
+    if (recentEnrichments.length > 0) {
+        activities.push({
+            id: `enrich-${recentEnrichments[0].id}`,
+            type: 'companies_enriched',
+            title: `${recentEnrichments.length} enriched`,
+            description: recentEnrichments.map(c => c.name).slice(0, 2).join(', '),
+            timestamp: recentEnrichments[0].enrichedAt!,
+        })
+    }
+
+    return activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+}
+
+// AI Suggestion types
+interface AISuggestion {
+    type: 'action' | 'insight' | 'tip' | 'warning'
+    priority: 'high' | 'normal'
+    title: string
+    description: string
+    action?: {
+        label: string
+        href: string
+    }
+}
+
+// Generate AI suggestions based on user data
+function generateAISuggestions(
+    companies: Array<{ id: string; name: string; isEnriched: boolean | null; metadata?: unknown }>,
+    leads: Array<{ id: string; firstName: string; lastName: string; jobTitle?: string | null }>,
+    searches: Array<{ id: string; name: string; status: string; resultsCount: number | null }>,
+    credits: { enrichmentRemaining: number; icpRemaining: number }
+): AISuggestion[] {
+    const suggestions: AISuggestion[] = []
+
+    // Get companies with job postings (hiring signal)
+    const companiesWithJobs = companies.filter(c => {
+        const meta = c.metadata as { jobCount?: number } | null
+        return meta?.jobCount && meta.jobCount > 0
+    })
+
+    // Get unenriched companies
+    const unenrichedCompanies = companies.filter(c => !c.isEnriched)
+
+    // 1. Credit warnings
+    if (credits.enrichmentRemaining < 20) {
+        suggestions.push({
+            type: 'warning',
+            priority: 'high',
+            title: 'Low enrichment credits',
+            description: `Only ${credits.enrichmentRemaining} enrichment credits remaining. Upgrade to continue enriching contacts.`,
+            action: { label: 'Upgrade plan', href: '/dashboard/settings' }
+        })
+    }
+
+    if (credits.icpRemaining < 100) {
+        suggestions.push({
+            type: 'warning',
+            priority: 'high',
+            title: 'Low ICP credits',
+            description: `Only ${credits.icpRemaining} ICP credits remaining. Upgrade to find more companies.`,
+            action: { label: 'Upgrade plan', href: '/dashboard/settings' }
+        })
+    }
+
+    // 2. Action suggestions based on data
+    if (unenrichedCompanies.length > 5 && credits.enrichmentRemaining > 10) {
+        const topUnenriched = unenrichedCompanies.slice(0, 3).map(c => c.name).join(', ')
+        suggestions.push({
+            type: 'action',
+            priority: 'high',
+            title: `Enrich ${unenrichedCompanies.length} companies`,
+            description: `${topUnenriched} and ${unenrichedCompanies.length - 3} more companies have hiring signals but no contact data yet.`,
+            action: { label: 'View companies', href: '/dashboard/companies' }
+        })
+    }
+
+    if (companiesWithJobs.length > 0) {
+        const highJobCount = companiesWithJobs.filter(c => {
+            const meta = c.metadata as { jobCount?: number } | null
+            return meta?.jobCount && meta.jobCount >= 5
+        })
+        if (highJobCount.length > 0) {
+            suggestions.push({
+                type: 'insight',
+                priority: 'high',
+                title: `${highJobCount.length} companies are rapidly hiring`,
+                description: `These companies have 5+ open positions - a strong buying signal. Consider prioritizing outreach to their decision makers.`,
+                action: { label: 'View hot leads', href: '/dashboard/leads' }
+            })
+        }
+    }
+
+    // 3. Tips based on usage patterns
+    if (searches.length === 0) {
+        suggestions.push({
+            type: 'tip',
+            priority: 'normal',
+            title: 'Create your first ICP',
+            description: 'Define your ideal customer profile to start finding companies that match your target market.',
+            action: { label: 'Create ICP', href: '/dashboard/icps/new' }
+        })
+    } else if (searches.length < 3) {
+        suggestions.push({
+            type: 'tip',
+            priority: 'normal',
+            title: 'Add more ICPs for better coverage',
+            description: 'Companies typically have 3-5 ICPs. Adding more helps you discover different market segments.',
+            action: { label: 'Create ICP', href: '/dashboard/icps/new' }
+        })
+    }
+
+    if (leads.length > 0 && leads.length < 20) {
+        suggestions.push({
+            type: 'tip',
+            priority: 'normal',
+            title: 'Build your contact pipeline',
+            description: `You have ${leads.length} contacts. Aim for 50+ contacts per ICP for effective outreach campaigns.`,
+            action: { label: 'Find more contacts', href: '/dashboard/people' }
+        })
+    }
+
+    // 4. Insights from data patterns
+    if (companies.length > 10) {
+        const enrichedPercent = Math.round((companies.filter(c => c.isEnriched).length / companies.length) * 100)
+        if (enrichedPercent < 30) {
+            suggestions.push({
+                type: 'insight',
+                priority: 'normal',
+                title: `Only ${enrichedPercent}% of companies enriched`,
+                description: 'Enriching more companies reveals decision-maker contacts and increases your outreach opportunities.',
+                action: { label: 'Enrich companies', href: '/dashboard/companies' }
+            })
+        }
+    }
+
+    // Limit to 4 suggestions max, prioritize high priority ones
+    return suggestions
+        .sort((a, b) => (a.priority === 'high' ? -1 : 1) - (b.priority === 'high' ? -1 : 1))
+        .slice(0, 4)
 }

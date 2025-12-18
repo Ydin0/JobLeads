@@ -8,28 +8,46 @@ import { SignOutButton, OrganizationSwitcher } from '@clerk/nextjs'
 import { cn } from '@/lib/utils'
 import {
     LayoutDashboard,
-    Search,
     Users,
-    Building2,
     Settings,
     HelpCircle,
     LogOut,
     Sparkles,
     Contact,
+    Target,
+    Upload,
 } from 'lucide-react'
 import { PricingModal } from './pricing-modal'
 
-const navigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Searches', href: '/dashboard/searches', icon: Search },
-    { name: 'Companies', href: '/dashboard/companies', icon: Building2 },
-    { name: 'People', href: '/dashboard/people', icon: Contact },
-    { name: 'Leads', href: '/dashboard/leads', icon: Users },
-]
-
-const secondaryNavigation = [
-    { name: 'Settings', href: '/dashboard/settings', icon: Settings },
-    { name: 'Help', href: '/dashboard/help', icon: HelpCircle },
+// Grouped navigation sections (Contra-style)
+const navigationSections = [
+    {
+        label: 'CORE',
+        items: [
+            { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+            { name: 'ICPs', href: '/dashboard/icps', icon: Target },
+        ]
+    },
+    {
+        label: 'LEADS',
+        items: [
+            { name: 'Prospects', href: '/dashboard/prospects', icon: Users },
+            { name: 'Leads', href: '/dashboard/leads', icon: Contact, badge: 'NEW' },
+        ]
+    },
+    {
+        label: 'DATA',
+        items: [
+            { name: 'Import', href: '/dashboard/import', icon: Upload },
+        ]
+    },
+    {
+        label: 'SETTINGS',
+        items: [
+            { name: 'Settings', href: '/dashboard/settings', icon: Settings },
+            { name: 'Help', href: '/dashboard/help', icon: HelpCircle },
+        ]
+    }
 ]
 
 export function DashboardSidebar() {
@@ -43,11 +61,9 @@ export function DashboardSidebar() {
             onOpenChange={setIsPricingModalOpen}
             currentPlan="free"
         />
-        <aside className="fixed inset-y-0 left-0 z-50 hidden w-64 flex-col border-r border-border bg-card/50 backdrop-blur-xl lg:flex">
-            {/* Subtle gradient overlay */}
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-foreground/[0.02] to-transparent" />
+        <aside className="fixed inset-y-0 left-0 z-50 hidden w-64 flex-col border-r border-black/10 bg-white lg:flex dark:border-white/10 dark:bg-[#0a0a0f]">
 
-            <div className="relative flex h-14 items-center border-b border-border px-6">
+            <div className="flex h-14 items-center border-b border-black/10 px-6 dark:border-white/10">
                 <Link href="/dashboard">
                     <Image
                         src="/Group.svg"
@@ -60,107 +76,94 @@ export function DashboardSidebar() {
             </div>
 
             {/* Organization Switcher */}
-            <div className="relative border-b border-border px-3 py-3">
+            <div className="border-b border-black/10 px-3 py-3 dark:border-white/10">
                 <OrganizationSwitcher
                     hidePersonal
-                    afterCreateOrganizationUrl="/dashboard"
+                    afterCreateOrganizationUrl="/onboarding"
                     afterSelectOrganizationUrl="/dashboard"
                     createOrganizationUrl="/onboarding/create-organization"
                     appearance={{
                         elements: {
                             rootBox: "w-full",
                             organizationSwitcherTrigger:
-                                "w-full justify-between rounded-lg border border-border bg-background/50 px-3 py-2 hover:bg-background/80",
+                                "w-full justify-between rounded-lg border border-black/10 bg-black/[0.02] px-3 py-2 hover:bg-black/5 dark:border-white/10 dark:bg-white/[0.02] dark:hover:bg-white/5",
                             organizationPreviewMainIdentifier: "text-sm font-medium",
-                            organizationPreviewSecondaryIdentifier: "text-muted-foreground",
-                            organizationSwitcherTriggerIcon: "text-muted-foreground",
+                            organizationPreviewSecondaryIdentifier: "text-black/50 dark:text-white/50",
+                            organizationSwitcherTriggerIcon: "text-black/50 dark:text-white/50",
                         },
                     }}
                 />
             </div>
 
-            <nav className="relative flex flex-1 flex-col px-3 py-4">
-                <ul className="space-y-1">
-                    {navigation.map((item) => {
-                        const isActive = pathname === item.href
-                        return (
-                            <li key={item.name}>
-                                <Link
-                                    href={item.href}
-                                    className={cn(
-                                        'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
-                                        isActive
-                                            ? 'text-foreground'
-                                            : 'text-muted-foreground hover:text-foreground/80'
-                                    )}>
-                                    {isActive && (
-                                        <div className="absolute inset-0 rounded-lg bg-[var(--theme-accent-muted)] ring-1 ring-inset ring-[var(--theme-accent)]/20" />
-                                    )}
-                                    <item.icon className={cn(
-                                        "relative size-4 transition-colors",
-                                        isActive ? "text-[var(--theme-accent)]" : "text-muted-foreground group-hover:text-foreground/60"
-                                    )} />
-                                    <span className="relative">{item.name}</span>
-                                </Link>
-                            </li>
-                        )
-                    })}
-                </ul>
-
-                <div className="my-4 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
-
-                <ul className="space-y-1">
-                    {secondaryNavigation.map((item) => {
-                        const isActive = pathname === item.href
-                        return (
-                            <li key={item.name}>
-                                <Link
-                                    href={item.href}
-                                    className={cn(
-                                        'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
-                                        isActive
-                                            ? 'text-foreground'
-                                            : 'text-muted-foreground hover:text-foreground/80'
-                                    )}>
-                                    {isActive && (
-                                        <div className="absolute inset-0 rounded-lg bg-[var(--theme-accent-muted)] ring-1 ring-inset ring-[var(--theme-accent)]/20" />
-                                    )}
-                                    <item.icon className={cn(
-                                        "relative size-4 transition-colors",
-                                        isActive ? "text-[var(--theme-accent)]" : "text-muted-foreground group-hover:text-foreground/60"
-                                    )} />
-                                    <span className="relative">{item.name}</span>
-                                </Link>
-                            </li>
-                        )
-                    })}
-                </ul>
+            <nav className="flex flex-1 flex-col px-3 py-3">
+                <div className="space-y-4">
+                    {navigationSections.map((section, sectionIndex) => (
+                        <div key={section.label}>
+                            {/* Section Label */}
+                            <div className="px-3 py-1.5">
+                                <span className="text-[10px] font-semibold uppercase tracking-wider text-black/40 dark:text-white/40">
+                                    {section.label}
+                                </span>
+                            </div>
+                            {/* Section Items */}
+                            <ul className="space-y-0.5">
+                                {section.items.map((item) => {
+                                    const isActive = item.href === '/dashboard'
+                                        ? pathname === item.href
+                                        : pathname.startsWith(item.href)
+                                    return (
+                                        <li key={item.name}>
+                                            <Link
+                                                href={item.href}
+                                                className={cn(
+                                                    'flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors',
+                                                    isActive
+                                                        ? 'bg-[#F8F7FF] text-black dark:bg-white/10 dark:text-white'
+                                                        : 'text-black/60 hover:bg-black/[0.02] hover:text-black dark:text-white/60 dark:hover:bg-white/[0.02] dark:hover:text-white'
+                                                )}>
+                                                <item.icon className={cn(
+                                                    "size-4",
+                                                    isActive ? "text-black dark:text-white" : "text-black/40 dark:text-white/40"
+                                                )} />
+                                                <span>{item.name}</span>
+                                                {item.badge && (
+                                                    <span className="ml-auto rounded-full bg-[#EDE9FE] px-2 py-0.5 text-[10px] font-medium text-[#7C3AED] dark:bg-purple-500/20 dark:text-purple-300">
+                                                        {item.badge}
+                                                    </span>
+                                                )}
+                                            </Link>
+                                        </li>
+                                    )
+                                })}
+                            </ul>
+                        </div>
+                    ))}
+                </div>
 
                 <div className="mt-auto space-y-3">
-                    {/* Upgrade Card */}
-                    <div className="relative overflow-hidden rounded-xl bg-[var(--theme-accent-muted)] p-4 ring-1 ring-inset ring-[var(--theme-accent)]/20">
-                        <div className="absolute -right-6 -top-6 size-24 rounded-full bg-[var(--theme-accent)]/20 blur-2xl" />
-                        <div className="relative">
-                            <div className="mb-2 flex items-center gap-2">
-                                <Sparkles className="size-4 text-[var(--theme-accent)]" />
-                                <span className="text-sm font-medium">Free Plan</span>
-                            </div>
-                            <div className="mb-3 text-xs text-muted-foreground">
-                                12 / 30 credits used
-                            </div>
-                            <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
-                                <div className="h-full w-[40%] rounded-full bg-gradient-to-r from-[var(--theme-accent-gradient-from)] to-[var(--theme-accent-gradient-to)]" />
-                            </div>
-                            <button
-                                onClick={() => setIsPricingModalOpen(true)}
-                                className="mt-3 block w-full text-center text-xs font-medium text-[var(--theme-accent)] transition-colors hover:text-[var(--theme-accent-light)]">
-                                Upgrade Plan →
-                            </button>
+                    {/* Upgrade Card (Contra-style) */}
+                    <div className="rounded-xl border border-black/5 bg-[#FAFAFA] p-4 dark:border-white/5 dark:bg-white/[0.02]">
+                        <div className="flex items-center gap-2">
+                            <Sparkles className="size-4 text-black/40 dark:text-white/40" />
+                            <span className="text-xs font-medium text-black/60 dark:text-white/60">
+                                Free Plan
+                            </span>
                         </div>
+                        <p className="mt-2 text-[13px] font-medium text-black dark:text-white">
+                            Unlock unlimited leads
+                        </p>
+                        <p className="mt-1 text-xs text-black/50 dark:text-white/50">
+                            Get advanced filters and CRM sync
+                        </p>
+                        <button
+                            onClick={() => setIsPricingModalOpen(true)}
+                            className="mt-3 w-full rounded-full bg-black py-2 text-xs font-medium text-white transition-colors hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/90">
+                            Upgrade to Pro
+                        </button>
                     </div>
 
                     <SignOutButton>
-                        <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground/80">
+                        <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium text-black/50 transition-colors hover:bg-black/5 hover:text-black/70 dark:text-white/50 dark:hover:bg-white/5 dark:hover:text-white/70">
                             <LogOut className="size-4" />
                             Sign Out
                         </button>

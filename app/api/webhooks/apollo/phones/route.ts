@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { leads } from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 // POST /api/webhooks/apollo/phones - Receive phone numbers from Apollo
 // Apollo sends phone data asynchronously after bulk_match with reveal_phone_number=true

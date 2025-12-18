@@ -7,18 +7,17 @@ import { eq, and } from "drizzle-orm";
 type RouteContext = { params: Promise<{ id: string }> };
 
 // GET /api/searches/[id] - Get a single search
+// Returns only the search metadata by default.
+// Companies/jobs are fetched separately via /api/companies with proper pagination.
 export async function GET(_req: Request, { params }: RouteContext) {
   try {
     const { orgId } = await requireOrgAuth();
     const { id } = await params;
 
+    // Only fetch the search record, not related data
+    // This prevents loading potentially thousands of companies/jobs
     const search = await db.query.searches.findFirst({
       where: and(eq(searches.id, id), eq(searches.orgId, orgId)),
-      with: {
-        companies: true,
-        leads: true,
-        jobs: true,
-      },
     });
 
     if (!search) {

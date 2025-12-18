@@ -6,512 +6,446 @@ import {
     User,
     CreditCard,
     Building2,
-    Bell,
-    Mail,
-    Shield,
-    Key,
-    Sparkles,
-    Download,
-    Plus,
-    Trash2,
+    Users,
     Crown,
     Zap,
-    AlertCircle,
+    Target,
+    Mail,
+    Trash2,
+    Plus,
+    Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PricingModal } from '@/components/dashboard/pricing-modal'
+import { useCredits } from '@/hooks/use-credits'
+import { useUser, useOrganization } from '@clerk/nextjs'
 
 const tabs = [
-    { id: 'profile', name: 'Profile', icon: User },
+    { id: 'general', name: 'General', icon: Building2 },
+    { id: 'team', name: 'Team', icon: Users },
     { id: 'billing', name: 'Billing', icon: CreditCard },
-    { id: 'organization', name: 'Organization', icon: Building2 },
-    { id: 'notifications', name: 'Notifications', icon: Bell },
-]
-
-const currentPlan = {
-    id: 'free',
-    name: 'Free',
-    price: '$0',
-    credits: 30,
-    creditsUsed: 12,
-    renewsAt: null,
-}
-
-const invoices = [
-    { id: '1', date: 'Dec 1, 2024', amount: '$0.00', status: 'paid', plan: 'Free' },
-]
-
-const teamMembers = [
-    { id: '1', name: 'You', email: 'you@example.com', role: 'Owner', avatar: 'Y' },
-]
-
-const usageHistory = [
-    { date: 'Today', action: 'Company enrichment', credits: 3, company: 'OpenAI' },
-    { date: 'Today', action: 'Company enrichment', credits: 3, company: 'Stripe' },
-    { date: 'Yesterday', action: 'Search run', credits: 5, company: null },
-    { date: 'Dec 10', action: 'Company enrichment', credits: 3, company: 'Meta' },
 ]
 
 export default function SettingsPage() {
-    const [activeTab, setActiveTab] = useState('profile')
+    const [activeTab, setActiveTab] = useState('general')
     const [isPricingModalOpen, setIsPricingModalOpen] = useState(false)
 
-    // Form states
-    const [profileForm, setProfileForm] = useState({
-        name: 'John Doe',
-        email: 'john@example.com',
+    const { user, isLoaded: userLoaded } = useUser()
+    const { organization, memberships, isLoaded: orgLoaded } = useOrganization({
+        memberships: { infinite: true },
     })
 
-    const [notificationSettings, setNotificationSettings] = useState({
-        searchComplete: true,
-        newLeads: true,
-        weeklyDigest: false,
-        productUpdates: true,
-        billingAlerts: true,
-    })
+    const {
+        credits,
+        isLoading: creditsLoading,
+        enrichmentUsed,
+        enrichmentLimit,
+        enrichmentRemaining,
+        icpUsed,
+        icpLimit,
+        icpRemaining,
+        planName,
+    } = useCredits()
 
-    const creditsPercentage = (currentPlan.creditsUsed / currentPlan.credits) * 100
+    const isLoading = !userLoaded || !orgLoaded || creditsLoading
+
+    if (isLoading) {
+        return (
+            <div className="flex items-center justify-center py-24">
+                <Loader2 className="size-8 animate-spin text-black/40 dark:text-white/40" />
+            </div>
+        )
+    }
+
+    const enrichmentPercentage = enrichmentLimit > 0 ? (enrichmentUsed / enrichmentLimit) * 100 : 0
+    const icpPercentage = icpLimit > 0 ? (icpUsed / icpLimit) * 100 : 0
+    const teamMembers = memberships?.data || []
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-6">
             <PricingModal
                 open={isPricingModalOpen}
                 onOpenChange={setIsPricingModalOpen}
-                currentPlan={currentPlan.id}
+                currentPlan={credits?.plan.id || 'free'}
             />
 
             {/* Header */}
             <div>
-                <h1 className="text-xl font-semibold text-white">Settings</h1>
-                <p className="text-sm text-white/40">Manage your account and preferences</p>
+                <h1 className="text-lg font-semibold text-black dark:text-white">Settings</h1>
+                <p className="text-sm text-black/50 dark:text-white/50">
+                    Manage your organization and billing
+                </p>
             </div>
 
-            <div className="flex gap-4">
-                {/* Sidebar Tabs */}
-                <div className="w-48 shrink-0">
-                    <div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02]">
-                        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                        <div className="p-2">
-                            {tabs.map((tab) => (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setActiveTab(tab.id)}
-                                    className={cn(
-                                        'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-all',
-                                        activeTab === tab.id
-                                            ? 'bg-white/10 text-white'
-                                            : 'text-white/40 hover:bg-white/5 hover:text-white/60'
-                                    )}>
-                                    <tab.icon className="size-3.5" />
-                                    {tab.name}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
+            {/* Tabs */}
+            <div className="flex items-center gap-1 border-b border-black/5 dark:border-white/5">
+                {tabs.map((tab) => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={cn(
+                            'relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors',
+                            activeTab === tab.id
+                                ? 'text-black dark:text-white'
+                                : 'text-black/40 hover:text-black/60 dark:text-white/40 dark:hover:text-white/60'
+                        )}
+                    >
+                        <tab.icon className="size-4" />
+                        {tab.name}
+                        {activeTab === tab.id && (
+                            <div className="absolute -bottom-px left-0 right-0 h-0.5 bg-black dark:bg-white" />
+                        )}
+                    </button>
+                ))}
+            </div>
 
-                {/* Content */}
-                <div className="flex-1 space-y-4">
-                    {/* Profile Tab */}
-                    {activeTab === 'profile' && (
-                        <>
-                            {/* Profile Info */}
-                            <div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02]">
-                                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                                <div className="border-b border-white/5 px-4 py-3">
-                                    <h2 className="text-sm font-medium text-white">Profile Information</h2>
-                                    <p className="text-xs text-white/40">Update your personal details</p>
-                                </div>
-                                <div className="p-4 space-y-4">
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex size-16 items-center justify-center rounded-full bg-gradient-to-br from-purple-500/20 to-blue-500/20 text-xl font-medium text-white ring-1 ring-inset ring-white/10">
-                                            {profileForm.name.split(' ').map(n => n[0]).join('')}
-                                        </div>
-                                        <div>
-                                            <Button size="sm" variant="outline" className="h-7 border-white/10 bg-white/5 px-2.5 text-xs text-white hover:bg-white/10">
-                                                Change Avatar
-                                            </Button>
-                                        </div>
-                                    </div>
-
-                                    <div className="grid gap-3 sm:grid-cols-2">
-                                        <div>
-                                            <label className="mb-1.5 block text-xs font-medium text-white">Full Name</label>
-                                            <input
-                                                type="text"
-                                                value={profileForm.name}
-                                                onChange={(e) => setProfileForm(prev => ({ ...prev, name: e.target.value }))}
-                                                className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-white/30 focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/10"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="mb-1.5 block text-xs font-medium text-white">Email</label>
-                                            <input
-                                                type="email"
-                                                value={profileForm.email}
-                                                onChange={(e) => setProfileForm(prev => ({ ...prev, email: e.target.value }))}
-                                                className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-white/30 focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/10"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="flex justify-end">
-                                        <Button size="sm" className="h-7 bg-white px-3 text-xs text-black hover:bg-white/90">
-                                            Save Changes
-                                        </Button>
-                                    </div>
-                                </div>
+            {/* Content */}
+            <div className="max-w-2xl space-y-6">
+                {/* General Tab */}
+                {activeTab === 'general' && (
+                    <>
+                        {/* Organization Info */}
+                        <div className="rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.02]">
+                            <div className="border-b border-black/5 px-5 py-4 dark:border-white/5">
+                                <h2 className="text-sm font-medium text-black dark:text-white">
+                                    Organization
+                                </h2>
+                                <p className="text-xs text-black/50 dark:text-white/50">
+                                    Manage your organization settings
+                                </p>
                             </div>
-
-                            {/* Security */}
-                            <div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02]">
-                                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                                <div className="border-b border-white/5 px-4 py-3">
-                                    <h2 className="text-sm font-medium text-white">Security</h2>
-                                    <p className="text-xs text-white/40">Manage your security settings</p>
-                                </div>
-                                <div className="p-4 space-y-3">
-                                    <div className="flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.02] p-3">
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex size-8 items-center justify-center rounded-lg bg-white/5">
-                                                <Key className="size-4 text-white/40" />
-                                            </div>
-                                            <div>
-                                                <div className="text-sm font-medium text-white">Password</div>
-                                                <div className="text-xs text-white/40">Last changed 30 days ago</div>
-                                            </div>
-                                        </div>
-                                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-white/40 hover:bg-white/10 hover:text-white">
-                                            Change
-                                        </Button>
-                                    </div>
-
-                                    <div className="flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.02] p-3">
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex size-8 items-center justify-center rounded-lg bg-white/5">
-                                                <Shield className="size-4 text-white/40" />
-                                            </div>
-                                            <div>
-                                                <div className="text-sm font-medium text-white">Two-Factor Authentication</div>
-                                                <div className="text-xs text-white/40">Add an extra layer of security</div>
-                                            </div>
-                                        </div>
-                                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-white/40 hover:bg-white/10 hover:text-white">
-                                            Enable
-                                        </Button>
-                                    </div>
-                                </div>
-                            </div>
-                        </>
-                    )}
-
-                    {/* Billing Tab */}
-                    {activeTab === 'billing' && (
-                        <>
-                            {/* Current Plan */}
-                            <div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02]">
-                                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                                <div className="absolute -right-20 -top-20 size-40 rounded-full bg-purple-500/5 blur-3xl" />
-                                <div className="relative border-b border-white/5 px-4 py-3">
-                                    <h2 className="text-sm font-medium text-white">Current Plan</h2>
-                                    <p className="text-xs text-white/40">Manage your subscription</p>
-                                </div>
-                                <div className="relative p-4">
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex size-10 items-center justify-center rounded-lg bg-gradient-to-br from-gray-500 to-gray-600 shadow-lg">
-                                                <Sparkles className="size-5 text-white" />
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-lg font-semibold text-white">{currentPlan.name}</span>
-                                                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white/60">Current</span>
-                                                </div>
-                                                <div className="text-xs text-white/40">{currentPlan.price}/month</div>
-                                            </div>
-                                        </div>
-                                        <Button
-                                            size="sm"
-                                            onClick={() => setIsPricingModalOpen(true)}
-                                            className="h-8 bg-gradient-to-r from-purple-500 to-blue-500 px-3 text-xs text-white hover:from-purple-600 hover:to-blue-600">
-                                            <Crown className="mr-1.5 size-3" />
-                                            Upgrade Plan
-                                        </Button>
-                                    </div>
-
-                                    {/* Credits Usage */}
-                                    <div className="mt-4 rounded-lg border border-white/5 bg-white/[0.02] p-3">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-xs font-medium text-white">Credits Usage</span>
-                                            <span className="text-xs text-white/40">{currentPlan.creditsUsed} / {currentPlan.credits} credits</span>
-                                        </div>
-                                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                                            <div
-                                                className="h-full rounded-full bg-gradient-to-r from-purple-500 to-blue-500"
-                                                style={{ width: `${creditsPercentage}%` }}
-                                            />
-                                        </div>
-                                        <div className="mt-2 flex items-center justify-between text-[10px] text-white/30">
-                                            <span>Resets monthly</span>
-                                            <span>{currentPlan.credits - currentPlan.creditsUsed} credits remaining</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Buy More Credits */}
-                                    <div className="mt-3 flex items-center justify-between rounded-lg border border-cyan-500/20 bg-gradient-to-r from-cyan-500/10 to-blue-500/5 p-3">
-                                        <div className="flex items-center gap-2">
-                                            <Zap className="size-4 text-cyan-400" />
-                                            <span className="text-xs text-white/70">Need more credits?</span>
-                                        </div>
-                                        <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-cyan-400 hover:bg-cyan-500/10 hover:text-cyan-300">
-                                            Buy Credits
-                                        </Button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Usage History */}
-                            <div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02]">
-                                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                                <div className="border-b border-white/5 px-4 py-3">
-                                    <h2 className="text-sm font-medium text-white">Usage History</h2>
-                                    <p className="text-xs text-white/40">Recent credit usage</p>
-                                </div>
-                                <div className="divide-y divide-white/5">
-                                    {usageHistory.map((item, index) => (
-                                        <div key={index} className="flex items-center justify-between px-4 py-2.5">
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex size-7 items-center justify-center rounded-lg bg-white/5">
-                                                    <Sparkles className="size-3 text-white/40" />
-                                                </div>
-                                                <div>
-                                                    <div className="text-xs text-white">{item.action}</div>
-                                                    <div className="text-[10px] text-white/30">
-                                                        {item.company ? item.company : 'All companies'} · {item.date}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <span className="text-xs font-medium text-white/60">-{item.credits} credits</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Payment Method */}
-                            <div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02]">
-                                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                                <div className="border-b border-white/5 px-4 py-3">
-                                    <h2 className="text-sm font-medium text-white">Payment Method</h2>
-                                    <p className="text-xs text-white/40">Manage your payment details</p>
-                                </div>
-                                <div className="p-4">
-                                    <div className="flex items-center justify-center rounded-lg border border-dashed border-white/10 py-6">
-                                        <div className="text-center">
-                                            <CreditCard className="mx-auto size-8 text-white/20" />
-                                            <p className="mt-2 text-xs text-white/40">No payment method on file</p>
-                                            <Button size="sm" variant="ghost" className="mt-2 h-7 px-2 text-xs text-white/40 hover:bg-white/10 hover:text-white">
-                                                <Plus className="mr-1 size-3" />
-                                                Add Payment Method
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Invoices */}
-                            <div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02]">
-                                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                                <div className="border-b border-white/5 px-4 py-3">
-                                    <h2 className="text-sm font-medium text-white">Invoices</h2>
-                                    <p className="text-xs text-white/40">Download past invoices</p>
-                                </div>
-                                <div className="divide-y divide-white/5">
-                                    {invoices.map((invoice) => (
-                                        <div key={invoice.id} className="flex items-center justify-between px-4 py-2.5">
-                                            <div className="flex items-center gap-3">
-                                                <div className="text-xs text-white">{invoice.date}</div>
-                                                <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-white/40">{invoice.plan}</span>
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-xs text-white/60">{invoice.amount}</span>
-                                                <span className="rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium text-green-400 ring-1 ring-inset ring-green-500/20">
-                                                    {invoice.status}
-                                                </span>
-                                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-white/30 hover:bg-white/10 hover:text-white">
-                                                    <Download className="size-3" />
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </>
-                    )}
-
-                    {/* Organization Tab */}
-                    {activeTab === 'organization' && (
-                        <>
-                            {/* Organization Info */}
-                            <div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02]">
-                                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                                <div className="border-b border-white/5 px-4 py-3">
-                                    <h2 className="text-sm font-medium text-white">Organization Details</h2>
-                                    <p className="text-xs text-white/40">Manage your organization settings</p>
-                                </div>
-                                <div className="p-4 space-y-4">
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex size-14 items-center justify-center rounded-lg bg-gradient-to-br from-white/10 to-white/5 text-xl font-bold text-white ring-1 ring-inset ring-white/10">
-                                            A
-                                        </div>
-                                        <div>
-                                            <Button size="sm" variant="outline" className="h-7 border-white/10 bg-white/5 px-2.5 text-xs text-white hover:bg-white/10">
-                                                Change Logo
-                                            </Button>
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <label className="mb-1.5 block text-xs font-medium text-white">Organization Name</label>
-                                        <input
-                                            type="text"
-                                            defaultValue="Acme Recruiting"
-                                            className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-white/30 focus:border-white/20 focus:outline-none focus:ring-1 focus:ring-white/10"
+                            <div className="space-y-4 p-5">
+                                <div className="flex items-center gap-4">
+                                    {organization?.imageUrl ? (
+                                        <img
+                                            src={organization.imageUrl}
+                                            alt=""
+                                            className="size-14 rounded-lg object-cover"
                                         />
-                                    </div>
-
-                                    <div className="flex justify-end">
-                                        <Button size="sm" className="h-7 bg-white px-3 text-xs text-black hover:bg-white/90">
-                                            Save Changes
-                                        </Button>
+                                    ) : (
+                                        <div className="flex size-14 items-center justify-center rounded-lg bg-black text-xl font-bold text-white dark:bg-white dark:text-black">
+                                            {organization?.name?.charAt(0) || 'O'}
+                                        </div>
+                                    )}
+                                    <div>
+                                        <p className="text-sm font-medium text-black dark:text-white">
+                                            {organization?.name || 'Organization'}
+                                        </p>
+                                        <p className="text-xs text-black/40 dark:text-white/40">
+                                            {organization?.slug ? `@${organization.slug}` : 'No slug set'}
+                                        </p>
                                     </div>
                                 </div>
-                            </div>
 
-                            {/* Team Members */}
-                            <div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02]">
-                                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                                <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
-                                    <div>
-                                        <h2 className="text-sm font-medium text-white">Team Members</h2>
-                                        <p className="text-xs text-white/40">Manage who has access</p>
-                                    </div>
-                                    <Button size="sm" variant="outline" className="h-7 border-white/10 bg-white/5 px-2.5 text-xs text-white hover:bg-white/10">
-                                        <Plus className="mr-1 size-3" />
-                                        Invite
+                                <div>
+                                    <label className="mb-1.5 block text-xs font-medium text-black dark:text-white">
+                                        Organization Name
+                                    </label>
+                                    <input
+                                        type="text"
+                                        defaultValue={organization?.name || ''}
+                                        className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm placeholder:text-black/40 focus:border-black/20 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:placeholder:text-white/40 dark:focus:border-white/20"
+                                    />
+                                </div>
+
+                                <div className="flex justify-end">
+                                    <Button className="h-9 rounded-full bg-black px-4 text-sm font-medium text-white hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/90">
+                                        Save Changes
                                     </Button>
                                 </div>
-                                <div className="divide-y divide-white/5">
-                                    {teamMembers.map((member) => (
-                                        <div key={member.id} className="flex items-center justify-between px-4 py-3">
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex size-8 items-center justify-center rounded-full bg-gradient-to-br from-purple-500/20 to-blue-500/20 text-xs font-medium text-white ring-1 ring-inset ring-white/10">
-                                                    {member.avatar}
-                                                </div>
-                                                <div>
-                                                    <div className="text-sm font-medium text-white">{member.name}</div>
-                                                    <div className="text-xs text-white/40">{member.email}</div>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] font-medium text-purple-400 ring-1 ring-inset ring-purple-500/20">
-                                                    {member.role}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                            </div>
+                        </div>
 
-                                {/* Upgrade notice for more members */}
-                                <div className="border-t border-white/5 px-4 py-3">
-                                    <div className="flex items-center gap-2 text-xs text-white/40">
-                                        <AlertCircle className="size-3" />
-                                        <span>Upgrade to Pro to add team members</span>
-                                        <button
-                                            onClick={() => setIsPricingModalOpen(true)}
-                                            className="text-purple-400 hover:text-purple-300">
-                                            Upgrade →
-                                        </button>
+                        {/* Your Profile */}
+                        <div className="rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.02]">
+                            <div className="border-b border-black/5 px-5 py-4 dark:border-white/5">
+                                <h2 className="text-sm font-medium text-black dark:text-white">
+                                    Your Profile
+                                </h2>
+                                <p className="text-xs text-black/50 dark:text-white/50">
+                                    Your personal information
+                                </p>
+                            </div>
+                            <div className="space-y-4 p-5">
+                                <div className="flex items-center gap-4">
+                                    {user?.imageUrl ? (
+                                        <img
+                                            src={user.imageUrl}
+                                            alt=""
+                                            className="size-12 rounded-full object-cover"
+                                        />
+                                    ) : (
+                                        <div className="flex size-12 items-center justify-center rounded-full bg-black text-lg font-bold text-white dark:bg-white dark:text-black">
+                                            {user?.firstName?.charAt(0) || '?'}
+                                        </div>
+                                    )}
+                                    <div>
+                                        <p className="text-sm font-medium text-black dark:text-white">
+                                            {user?.fullName || 'User'}
+                                        </p>
+                                        <p className="text-xs text-black/40 dark:text-white/40">
+                                            {user?.primaryEmailAddress?.emailAddress || 'No email'}
+                                        </p>
                                     </div>
                                 </div>
                             </div>
+                        </div>
 
-                            {/* Danger Zone */}
-                            <div className="relative overflow-hidden rounded-xl border border-red-500/20 bg-red-500/5">
-                                <div className="border-b border-red-500/20 px-4 py-3">
-                                    <h2 className="text-sm font-medium text-red-400">Danger Zone</h2>
-                                    <p className="text-xs text-white/40">Irreversible actions</p>
+                        {/* Danger Zone */}
+                        <div className="rounded-xl border border-red-200 bg-red-50 dark:border-red-500/20 dark:bg-red-500/5">
+                            <div className="border-b border-red-200 px-5 py-4 dark:border-red-500/20">
+                                <h2 className="text-sm font-medium text-red-700 dark:text-red-400">
+                                    Danger Zone
+                                </h2>
+                            </div>
+                            <div className="p-5">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm font-medium text-black dark:text-white">
+                                            Delete Organization
+                                        </p>
+                                        <p className="text-xs text-black/50 dark:text-white/50">
+                                            Permanently delete all data
+                                        </p>
+                                    </div>
+                                    <Button
+                                        variant="outline"
+                                        className="h-8 rounded-full border-red-200 px-3 text-xs text-red-600 hover:bg-red-50 dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/10"
+                                    >
+                                        <Trash2 className="mr-1.5 size-3.5" />
+                                        Delete
+                                    </Button>
                                 </div>
-                                <div className="p-4">
-                                    <div className="flex items-center justify-between">
+                            </div>
+                        </div>
+                    </>
+                )}
+
+                {/* Team Tab */}
+                {activeTab === 'team' && (
+                    <>
+                        <div className="rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.02]">
+                            <div className="flex items-center justify-between border-b border-black/5 px-5 py-4 dark:border-white/5">
+                                <div>
+                                    <h2 className="text-sm font-medium text-black dark:text-white">
+                                        Team Members
+                                    </h2>
+                                    <p className="text-xs text-black/50 dark:text-white/50">
+                                        {teamMembers.length} member{teamMembers.length !== 1 ? 's' : ''}
+                                    </p>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    className="h-8 rounded-full border-black/10 px-3 text-xs dark:border-white/10"
+                                >
+                                    <Plus className="mr-1.5 size-3.5" />
+                                    Invite
+                                </Button>
+                            </div>
+                            <div className="divide-y divide-black/5 dark:divide-white/5">
+                                {/* Current user */}
+                                <div className="flex items-center justify-between px-5 py-4">
+                                    <div className="flex items-center gap-3">
+                                        {user?.imageUrl ? (
+                                            <img
+                                                src={user.imageUrl}
+                                                alt=""
+                                                className="size-10 rounded-full object-cover"
+                                            />
+                                        ) : (
+                                            <div className="flex size-10 items-center justify-center rounded-full bg-black text-sm font-bold text-white dark:bg-white dark:text-black">
+                                                {user?.firstName?.charAt(0) || '?'}
+                                            </div>
+                                        )}
                                         <div>
-                                            <div className="text-sm font-medium text-white">Delete Organization</div>
-                                            <div className="text-xs text-white/40">Permanently delete all data</div>
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-sm font-medium text-black dark:text-white">
+                                                    {user?.fullName || 'You'}
+                                                </p>
+                                                <Crown className="size-3.5 text-amber-500" />
+                                            </div>
+                                            <p className="text-xs text-black/40 dark:text-white/40">
+                                                {user?.primaryEmailAddress?.emailAddress}
+                                            </p>
                                         </div>
-                                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-red-400 hover:bg-red-500/10 hover:text-red-300">
-                                            <Trash2 className="mr-1 size-3" />
-                                            Delete
+                                    </div>
+                                    <span className="rounded-full bg-black/5 px-2.5 py-1 text-[10px] font-medium text-black/60 dark:bg-white/10 dark:text-white/60">
+                                        Owner
+                                    </span>
+                                </div>
+
+                                {/* Other members */}
+                                {teamMembers
+                                    .filter((m) => m.publicUserData?.userId !== user?.id)
+                                    .map((member) => (
+                                        <div
+                                            key={member.id}
+                                            className="flex items-center justify-between px-5 py-4"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex size-10 items-center justify-center rounded-full bg-black/5 text-sm font-medium text-black/60 dark:bg-white/10 dark:text-white/60">
+                                                    {member.publicUserData?.firstName?.charAt(0) || '?'}
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-medium text-black dark:text-white">
+                                                        {member.publicUserData?.firstName}{' '}
+                                                        {member.publicUserData?.lastName}
+                                                    </p>
+                                                    <p className="text-xs text-black/40 dark:text-white/40">
+                                                        {member.publicUserData?.identifier}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <span className="rounded-full bg-black/5 px-2.5 py-1 text-[10px] font-medium capitalize text-black/60 dark:bg-white/10 dark:text-white/60">
+                                                {member.role}
+                                            </span>
+                                        </div>
+                                    ))}
+                            </div>
+
+                            {/* Invite prompt */}
+                            <div className="border-t border-black/5 px-5 py-4 dark:border-white/5">
+                                <button className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-black/10 py-3 text-xs text-black/50 transition-colors hover:border-black/20 hover:text-black/70 dark:border-white/10 dark:text-white/50 dark:hover:border-white/20 dark:hover:text-white/70">
+                                    <Mail className="size-4" />
+                                    Invite team member
+                                </button>
+                            </div>
+                        </div>
+                    </>
+                )}
+
+                {/* Billing Tab */}
+                {activeTab === 'billing' && (
+                    <>
+                        {/* Current Plan */}
+                        <div className="rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.02]">
+                            <div className="border-b border-black/5 px-5 py-4 dark:border-white/5">
+                                <h2 className="text-sm font-medium text-black dark:text-white">
+                                    Current Plan
+                                </h2>
+                            </div>
+                            <div className="p-5">
+                                <div className="flex items-start justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex size-12 items-center justify-center rounded-xl bg-black dark:bg-white">
+                                            <Crown className="size-6 text-white dark:text-black" />
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-lg font-semibold text-black dark:text-white">
+                                                    {planName}
+                                                </span>
+                                                <span className="rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium text-black/60 dark:bg-white/10 dark:text-white/60">
+                                                    Current
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-black/40 dark:text-white/40">
+                                                {credits?.plan.price === 0
+                                                    ? 'Free forever'
+                                                    : `$${credits?.plan.price}/month`}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <Button
+                                        onClick={() => setIsPricingModalOpen(true)}
+                                        className="h-9 rounded-full bg-black px-4 text-sm font-medium text-white hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                                    >
+                                        Upgrade Plan
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Credit Usage */}
+                        <div className="rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.02]">
+                            <div className="border-b border-black/5 px-5 py-4 dark:border-white/5">
+                                <h2 className="text-sm font-medium text-black dark:text-white">
+                                    Credit Usage
+                                </h2>
+                                <p className="text-xs text-black/50 dark:text-white/50">
+                                    {credits?.billingCycle?.end
+                                        ? `Resets ${new Date(credits.billingCycle.end).toLocaleDateString()}`
+                                        : 'Resets monthly'}
+                                </p>
+                            </div>
+                            <div className="space-y-4 p-5">
+                                {/* Enrichment Credits */}
+                                <div className="rounded-lg border border-black/5 bg-black/[0.02] p-4 dark:border-white/5 dark:bg-white/[0.02]">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Zap className="size-4 text-black/40 dark:text-white/40" />
+                                            <span className="text-sm font-medium text-black dark:text-white">
+                                                Enrichment Credits
+                                            </span>
+                                        </div>
+                                        <span className="text-sm text-black/60 dark:text-white/60">
+                                            {enrichmentUsed.toLocaleString()} / {enrichmentLimit.toLocaleString()}
+                                        </span>
+                                    </div>
+                                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+                                        <div
+                                            className="h-full rounded-full bg-black dark:bg-white"
+                                            style={{ width: `${Math.min(enrichmentPercentage, 100)}%` }}
+                                        />
+                                    </div>
+                                    <p className="mt-2 text-xs text-black/40 dark:text-white/40">
+                                        {enrichmentRemaining.toLocaleString()} credits remaining
+                                    </p>
+                                </div>
+
+                                {/* ICP Credits */}
+                                <div className="rounded-lg border border-black/5 bg-black/[0.02] p-4 dark:border-white/5 dark:bg-white/[0.02]">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Target className="size-4 text-black/40 dark:text-white/40" />
+                                            <span className="text-sm font-medium text-black dark:text-white">
+                                                ICP Credits
+                                            </span>
+                                        </div>
+                                        <span className="text-sm text-black/60 dark:text-white/60">
+                                            {icpUsed.toLocaleString()} / {icpLimit.toLocaleString()}
+                                        </span>
+                                    </div>
+                                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+                                        <div
+                                            className="h-full rounded-full bg-black dark:bg-white"
+                                            style={{ width: `${Math.min(icpPercentage, 100)}%` }}
+                                        />
+                                    </div>
+                                    <p className="mt-2 text-xs text-black/40 dark:text-white/40">
+                                        {icpRemaining.toLocaleString()} credits remaining
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Payment Method */}
+                        <div className="rounded-xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.02]">
+                            <div className="border-b border-black/5 px-5 py-4 dark:border-white/5">
+                                <h2 className="text-sm font-medium text-black dark:text-white">
+                                    Payment Method
+                                </h2>
+                            </div>
+                            <div className="p-5">
+                                <div className="flex items-center justify-center rounded-lg border border-dashed border-black/10 py-8 dark:border-white/10">
+                                    <div className="text-center">
+                                        <CreditCard className="mx-auto size-8 text-black/20 dark:text-white/20" />
+                                        <p className="mt-2 text-xs text-black/40 dark:text-white/40">
+                                            No payment method on file
+                                        </p>
+                                        <Button
+                                            variant="outline"
+                                            className="mt-3 h-8 rounded-full border-black/10 px-3 text-xs dark:border-white/10"
+                                        >
+                                            <Plus className="mr-1.5 size-3.5" />
+                                            Add Payment Method
                                         </Button>
                                     </div>
                                 </div>
                             </div>
-                        </>
-                    )}
-
-                    {/* Notifications Tab */}
-                    {activeTab === 'notifications' && (
-                        <>
-                            {/* Email Notifications */}
-                            <div className="relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02]">
-                                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                                <div className="border-b border-white/5 px-4 py-3">
-                                    <h2 className="text-sm font-medium text-white">Email Notifications</h2>
-                                    <p className="text-xs text-white/40">Choose what emails you receive</p>
-                                </div>
-                                <div className="divide-y divide-white/5">
-                                    {[
-                                        { key: 'searchComplete', label: 'Search Complete', desc: 'Get notified when a search finishes running' },
-                                        { key: 'newLeads', label: 'New Leads Found', desc: 'Receive alerts when new contacts are found' },
-                                        { key: 'weeklyDigest', label: 'Weekly Digest', desc: 'Summary of your activity every week' },
-                                        { key: 'productUpdates', label: 'Product Updates', desc: 'News about new features and improvements' },
-                                        { key: 'billingAlerts', label: 'Billing Alerts', desc: 'Payment reminders and usage warnings' },
-                                    ].map((item) => (
-                                        <div key={item.key} className="flex items-center justify-between px-4 py-3">
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex size-8 items-center justify-center rounded-lg bg-white/5">
-                                                    <Mail className="size-4 text-white/40" />
-                                                </div>
-                                                <div>
-                                                    <div className="text-sm font-medium text-white">{item.label}</div>
-                                                    <div className="text-xs text-white/40">{item.desc}</div>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => setNotificationSettings(prev => ({
-                                                    ...prev,
-                                                    [item.key]: !prev[item.key as keyof typeof prev]
-                                                }))}
-                                                className={cn(
-                                                    'relative h-5 w-9 rounded-full transition-colors',
-                                                    notificationSettings[item.key as keyof typeof notificationSettings]
-                                                        ? 'bg-green-500'
-                                                        : 'bg-white/10'
-                                                )}>
-                                                <div
-                                                    className={cn(
-                                                        'absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform',
-                                                        notificationSettings[item.key as keyof typeof notificationSettings]
-                                                            ? 'translate-x-4'
-                                                            : 'translate-x-0.5'
-                                                    )}
-                                                />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </>
-                    )}
-                </div>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     )

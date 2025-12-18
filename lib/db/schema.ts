@@ -8,6 +8,7 @@ import {
   jsonb,
   boolean,
   pgEnum,
+  index,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -82,6 +83,24 @@ export const searches = pgTable("searches", {
     companyNames?: string[];
     companyIds?: string[];
     keywords?: string[];
+    // ICP configuration
+    departments?: string[];
+    techStack?: string[];
+    minJobs?: number;
+    // Scraper configurations
+    scrapers?: Array<{
+      jobTitle: string;
+      location: string;
+      experienceLevel: string;
+    }>;
+    jobBoards?: string[];
+    maxRows?: number;
+    // Enrichment filter preferences (saved for quick re-enrichment)
+    enrichmentFilters?: {
+      decisionMakerTitles?: string[];
+      decisionMakerSeniorities?: string[];
+      lastUsedAt?: string;
+    };
   }>(),
   status: searchStatusEnum("status").default("active").notNull(),
   resultsCount: integer("results_count").default(0),
@@ -110,7 +129,11 @@ export const companies = pgTable("companies", {
   metadata: jsonb("metadata").$type<Record<string, unknown>>(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("companies_org_id_idx").on(table.orgId),
+  index("companies_search_id_idx").on(table.searchId),
+  index("companies_created_at_idx").on(table.createdAt),
+]);
 
 // Job department categories
 export const jobDepartmentEnum = pgEnum("job_department", [
@@ -155,7 +178,11 @@ export const jobs = pgTable("jobs", {
   metadata: jsonb("metadata").$type<Record<string, unknown>>(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("jobs_company_id_idx").on(table.companyId),
+  index("jobs_search_id_idx").on(table.searchId),
+  index("jobs_org_id_idx").on(table.orgId),
+]);
 
 // Employees table - all contacts found from company enrichment
 export const employees = pgTable("employees", {
@@ -176,7 +203,10 @@ export const employees = pgTable("employees", {
   metadata: jsonb("metadata").$type<Record<string, unknown>>(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("employees_company_id_idx").on(table.companyId),
+  index("employees_org_id_idx").on(table.orgId),
+]);
 
 // Leads table - shortlisted contacts for outreach
 export const leads = pgTable("leads", {
@@ -197,6 +227,170 @@ export const leads = pgTable("leads", {
   metadata: jsonb("metadata").$type<Record<string, unknown>>(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("leads_company_id_idx").on(table.companyId),
+  index("leads_org_id_idx").on(table.orgId),
+  index("leads_search_id_idx").on(table.searchId),
+]);
+
+// ============================================
+// GLOBAL CACHE TABLES (not org-scoped)
+// ============================================
+
+// Global employees cache - stores all employees fetched from Apollo across the platform
+export const globalEmployees = pgTable("global_employees", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  // Apollo identification (unique constraint for deduplication)
+  apolloId: varchar("apollo_id", { length: 255 }).unique().notNull(),
+
+  // Company identification (global lookup key)
+  companyDomain: varchar("company_domain", { length: 255 }).notNull(),
+  companyName: varchar("company_name", { length: 255 }),
+  companyLinkedinUrl: text("company_linkedin_url"),
+
+  // Employee data
+  firstName: varchar("first_name", { length: 255 }).notNull(),
+  lastName: varchar("last_name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }),
+  phone: varchar("phone", { length: 50 }),
+  jobTitle: varchar("job_title", { length: 255 }),
+  linkedinUrl: text("linkedin_url"),
+  location: varchar("location", { length: 255 }),
+  seniority: varchar("seniority", { length: 100 }),
+  department: varchar("department", { length: 255 }),
+
+  // Extended metadata from Apollo
+  metadata: jsonb("metadata").$type<{
+    departments?: string[];
+    phoneNumbers?: Array<{ raw_number?: string; sanitized_number?: string; type?: string; status?: string }>;
+    employmentHistory?: unknown[];
+  }>(),
+
+  // Data freshness tracking
+  fetchedAt: timestamp("fetched_at", { withTimezone: true }).defaultNow().notNull(),
+  lastVerifiedAt: timestamp("last_verified_at", { withTimezone: true }),
+
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Global companies cache - tracks which companies have been enriched globally
+export const globalCompanies = pgTable("global_companies", {
+  id: uuid("id").defaultRandom().primaryKey(),
+
+  // Primary identifiers (domain is the unique lookup key)
+  domain: varchar("domain", { length: 255 }).unique().notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+
+  // Enrichment tracking
+  employeesLastFetchedAt: timestamp("employees_last_fetched_at", { withTimezone: true }),
+  employeesCount: integer("employees_count").default(0),
+  enrichmentSource: varchar("enrichment_source", { length: 50 }), // 'apollo', 'pdl'
+
+  // Company data (from PDL/Apollo)
+  industry: varchar("industry", { length: 255 }),
+  size: varchar("size", { length: 100 }),
+  location: varchar("location", { length: 255 }),
+  linkedinUrl: text("linkedin_url"),
+  websiteUrl: text("website_url"),
+  logoUrl: text("logo_url"),
+  description: text("description"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+
+  // Data freshness configuration
+  staleAfterDays: integer("stale_after_days").default(30),
+
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Enrichment transactions - audit trail for credit consumption
+export const enrichmentTransactions = pgTable("enrichment_transactions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  orgId: varchar("org_id", { length: 255 }).notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id),
+
+  // Transaction details
+  transactionType: varchar("transaction_type", { length: 50 }).notNull(), // 'company_enrich', 'bulk_enrich', 'employee_enrich'
+  creditsUsed: integer("credits_used").notNull(),
+
+  // Reference data
+  companyId: uuid("company_id").references(() => companies.id, { onDelete: "set null" }),
+  searchId: uuid("search_id").references(() => searches.id, { onDelete: "set null" }),
+  employeeCount: integer("employee_count"), // How many employees were enriched
+
+  // Cache metrics
+  cacheHit: boolean("cache_hit").default(false), // True if data came from global cache
+  apolloCallsMade: integer("apollo_calls_made").default(0),
+
+  // Filter metadata
+  metadata: jsonb("metadata").$type<{
+    filters?: { titles?: string[]; seniorities?: string[] };
+    sourceCompanyDomain?: string;
+    globalEmployeeIds?: string[];
+    fetchAll?: boolean;
+    companyIds?: string[];
+  }>(),
+
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Credit usage - tracks credit limits and usage per organization with billing cycles
+export const creditUsage = pgTable("credit_usage", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  orgId: varchar("org_id", { length: 255 }).notNull().references(() => organizations.id, { onDelete: "cascade" }).unique(),
+
+  // Credit limits (from subscription plan)
+  enrichmentLimit: integer("enrichment_limit").notNull().default(200),
+  icpLimit: integer("icp_limit").notNull().default(1000),
+
+  // Current usage (reset monthly)
+  enrichmentUsed: integer("enrichment_used").notNull().default(0),
+  icpUsed: integer("icp_used").notNull().default(0),
+
+  // Billing cycle
+  billingCycleStart: timestamp("billing_cycle_start", { withTimezone: true }).defaultNow().notNull(),
+  billingCycleEnd: timestamp("billing_cycle_end", { withTimezone: true }).notNull(),
+
+  // Plan info
+  planId: varchar("plan_id", { length: 50 }).default("free"),
+
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Scraper runs - tracks execution history of job scrapers
+export const scraperRuns = pgTable("scraper_runs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  searchId: uuid("search_id").notNull().references(() => searches.id, { onDelete: "cascade" }),
+  orgId: varchar("org_id", { length: 255 }).notNull().references(() => organizations.id, { onDelete: "cascade" }),
+
+  // Which scraper config was run
+  scraperIndex: integer("scraper_index"), // Index in the scrapers array, null if combined run
+  scraperConfig: jsonb("scraper_config").$type<{
+    jobTitle: string;
+    location: string;
+    experienceLevel: string;
+  }>(),
+
+  // Execution status
+  status: varchar("status", { length: 50 }).notNull(), // 'running', 'completed', 'failed'
+
+  // Results metrics
+  jobsFound: integer("jobs_found").default(0),
+  companiesFound: integer("companies_found").default(0),
+  newCompanies: integer("new_companies").default(0), // Deduplicated new companies added
+  leadsCreated: integer("leads_created").default(0),
+
+  // Execution metadata
+  duration: integer("duration"), // Execution duration in seconds
+  errorMessage: text("error_message"),
+  apifyRunId: varchar("apify_run_id", { length: 255 }), // For debugging/reference
+
+  // Timestamps
+  startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
 });
 
 // Relations
@@ -216,6 +410,14 @@ export const organizationsRelations = relations(organizations, ({ one, many }) =
   companies: many(companies),
   employees: many(employees),
   leads: many(leads),
+  creditUsage: one(creditUsage),
+}));
+
+export const creditUsageRelations = relations(creditUsage, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [creditUsage.orgId],
+    references: [organizations.id],
+  }),
 }));
 
 export const organizationMembersRelations = relations(organizationMembers, ({ one }) => ({
@@ -241,6 +443,18 @@ export const searchesRelations = relations(searches, ({ one, many }) => ({
   companies: many(companies),
   leads: many(leads),
   jobs: many(jobs),
+  scraperRuns: many(scraperRuns),
+}));
+
+export const scraperRunsRelations = relations(scraperRuns, ({ one }) => ({
+  search: one(searches, {
+    fields: [scraperRuns.searchId],
+    references: [searches.id],
+  }),
+  organization: one(organizations, {
+    fields: [scraperRuns.orgId],
+    references: [organizations.id],
+  }),
 }));
 
 export const companiesRelations = relations(companies, ({ one, many }) => ({
@@ -319,3 +533,11 @@ export type Employee = typeof employees.$inferSelect;
 export type NewEmployee = typeof employees.$inferInsert;
 export type Lead = typeof leads.$inferSelect;
 export type NewLead = typeof leads.$inferInsert;
+export type GlobalEmployee = typeof globalEmployees.$inferSelect;
+export type NewGlobalEmployee = typeof globalEmployees.$inferInsert;
+export type GlobalCompany = typeof globalCompanies.$inferSelect;
+export type NewGlobalCompany = typeof globalCompanies.$inferInsert;
+export type EnrichmentTransaction = typeof enrichmentTransactions.$inferSelect;
+export type NewEnrichmentTransaction = typeof enrichmentTransactions.$inferInsert;
+export type ScraperRun = typeof scraperRuns.$inferSelect;
+export type NewScraperRun = typeof scraperRuns.$inferInsert;

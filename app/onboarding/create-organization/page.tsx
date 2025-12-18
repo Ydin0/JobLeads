@@ -12,7 +12,7 @@ export default function CreateOrganizationPage() {
                 </p>
             </div>
             <CreateOrganization
-                afterCreateOrganizationUrl="/dashboard"
+                afterCreateOrganizationUrl="/onboarding"
                 appearance={{
                     elements: {
                         rootBox: "mx-auto",
