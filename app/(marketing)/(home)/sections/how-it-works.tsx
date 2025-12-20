@@ -1,157 +1,82 @@
-import { cn } from '@/lib/utils'
-import { Search, Users, Send } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { DocumentIllustation } from '@/components/illustrations/document-illustration'
+import { CurrencyIllustration } from '@/components/illustrations/currency-illustration'
+import { ArrowBigRight } from 'lucide-react'
+import Link from 'next/link'
 
-export function HowItWorks() {
+export function HowItWorksSection() {
     return (
-        <section className="bg-background @container">
-            <div className="py-24">
-                <div className="mx-auto w-full max-w-5xl px-6 xl:px-0">
-                    <div className="@4xl:text-left text-center">
-                        <h2 className="text-foreground text-3xl font-semibold">How RecLead Works</h2>
-                        <p className="text-muted-foreground mt-4 text-balance text-lg">
-                            Our streamlined three-step process turns job postings into <span className="text-foreground">qualified leads</span> for your recruitment agency.
-                        </p>
+        <section className="relative">
+            <div
+                aria-hidden
+                className="mask-b-from-65% pointer-events-none absolute -left-2 right-0 -mt-12 sm:-top-24 lg:inset-x-0 lg:-top-32">
+                <svg
+                    viewBox="0 0 2400 1653"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="text-foreground/15 fill-background/35 w-full">
+                    <path
+                        d="M6.81602 605.752L38.684 642.748C42.4362 647.104 44.5 652.662 44.5 658.411V1628.23C44.5 1641.59 55.4076 1652.38 68.7652 1652.23L2375.26 1626.76C2388.42 1626.62 2399 1615.92 2399 1602.76V2L2153.06 247.941C2144.06 256.943 2131.85 262 2119.12 262H90.4852C84.094 262 77.9667 264.549 73.4616 269.083L7.97632 334.98C3.50795 339.476 1 345.558 1 351.897V590.089C1 595.838 3.06383 601.396 6.81602 605.752Z"
+                        stroke="currentColor"
+                    />
+                </svg>
+            </div>
+            <div className="relative py-24">
+                <div className="@container relative mx-auto w-full max-w-5xl px-6">
+                    <div className="mx-auto max-w-2xl text-center">
+                        <span className="text-primary text-sm uppercase">Our Process</span>
+                        <h2 className="text-foreground mt-8 text-4xl font-semibold md:text-5xl">Simple Three-Step Workflow</h2>
+                        <p className="text-muted-foreground mt-4 text-balance text-lg">Experience our streamlined approach to data analysis that empowers your team to make informed decisions quickly and efficiently.</p>
                     </div>
-                    <div className="@max-4xl:max-w-sm relative mx-auto mt-12">
-                        <PlusDecorator className="-translate-[calc(50%-0.5px)]" />
-                        <PlusDecorator className="right-0 -translate-y-[calc(50%-0.5px)] translate-x-[calc(50%-0.5px)]" />
-                        <PlusDecorator className="bottom-0 right-0 translate-x-[calc(50%-0.5px)] translate-y-[calc(50%-0.5px)]" />
-                        <PlusDecorator className="bottom-0 -translate-x-[calc(50%-0.5px)] translate-y-[calc(50%-0.5px)]" />
-                        <div className="@4xl:grid-cols-3 @4xl:divide-x @max-4xl:divide-y grid overflow-hidden border [--color-border:color-mix(in_oklab,var(--color-foreground)10%,transparent)] [--color-card:color-mix(in_oklab,var(--color-muted)15%,var(--color-background))] *:p-8">
-                            <div className="row-span-2 grid grid-rows-subgrid gap-8">
-                                <div
-                                    aria-hidden
-                                    className="relative flex flex-col justify-end">
-                                    <Counter number={1} />
-                                    <SearchIllustration />
-                                </div>
-                                <div>
-                                    <h3 className="text-foreground font-semibold">Set Your Search Criteria</h3>
-                                    <p className="text-muted-foreground mt-2">Define target industries, locations, company sizes, and job titles. Save searches for reuse.</p>
-                                </div>
-                            </div>
-                            <div className="row-span-2 grid grid-rows-subgrid gap-8">
-                                <div
-                                    aria-hidden
-                                    className="relative flex flex-col justify-end">
-                                    <Counter number={2} />
-                                    <EnrichIllustration />
-                                </div>
 
-                                <div>
-                                    <h3 className="text-foreground font-semibold">We Scrape & Enrich</h3>
-                                    <p className="text-muted-foreground mt-2">Our system scrapes job boards and enriches each lead with verified contact information.</p>
+                    <div className="@3xl:grid-cols-3 my-20 grid gap-12">
+                        <div className="space-y-6">
+                            <div className="text-center">
+                                <span className="mx-auto flex size-6 items-center justify-center rounded-full bg-zinc-500/15 text-sm font-medium text-zinc-700">1</span>
+                                <div className="relative">
+                                    <div className="mx-auto my-6 w-fit">
+                                        <DocumentIllustation />
+                                    </div>
+                                    <ArrowBigRight className="@3xl:block fill-background stroke-background absolute inset-y-0 right-0 my-auto hidden translate-x-[150%] drop-shadow" />
                                 </div>
+                                <h3 className="text-foreground mb-4 text-lg font-semibold">Data Collection</h3>
+                                <p className="text-muted-foreground text-balance">Easily import data from multiple sources and formats with.</p>
                             </div>
-                            <div className="row-span-2 grid grid-rows-subgrid gap-8">
-                                <div
-                                    aria-hidden
-                                    className="relative flex flex-col justify-center">
-                                    <Counter number={3} />
-                                    <CRMIllustration />
+                        </div>
+                        <div className="space-y-6">
+                            <div className="text-center">
+                                <span className="mx-auto flex size-6 items-center justify-center rounded-full bg-zinc-500/15 text-sm font-medium text-zinc-700">2</span>
+                                <div className="relative">
+                                    <div className="mx-auto my-6 w-fit">
+                                        <CurrencyIllustration />
+                                    </div>
+                                    <ArrowBigRight className="@3xl:block fill-background stroke-background absolute inset-y-0 right-0 my-auto hidden translate-x-[150%] drop-shadow" />
                                 </div>
-
-                                <div className="@4xl:mt-0 mt-8">
-                                    <h3 className="text-foreground font-semibold">Leads Pushed to CRM</h3>
-                                    <p className="text-muted-foreground mt-2">Qualified leads are automatically pushed to your CRM, ready for outreach.</p>
+                                <h3 className="text-foreground mb-4 text-lg font-semibold">Automated Analysis</h3>
+                                <p className="text-muted-foreground text-balance">Our AI-powered system processes complex datasets to identify patterns.</p>
+                            </div>
+                        </div>
+                        <div className="space-y-6">
+                            <div className="text-center">
+                                <span className="mx-auto flex size-6 items-center justify-center rounded-full bg-zinc-500/15 text-sm font-medium text-zinc-700">3</span>
+                                <div className="mx-auto my-6 flex w-fit gap-2">
+                                    <DocumentIllustation />
+                                    <DocumentIllustation />
                                 </div>
+                                <h3 className="text-foreground mb-4 text-lg font-semibold">Actionable Reports</h3>
+                                <p className="text-muted-foreground text-balance">Transform insights into beautiful visualizations and shareable reports.</p>
                             </div>
                         </div>
                     </div>
+
+                    <Button
+                        asChild
+                        variant="outline"
+                        className="mx-auto flex w-fit">
+                        <Link href="/sign-up">Get Started</Link>
+                    </Button>
                 </div>
             </div>
         </section>
     )
 }
-
-const PlusDecorator = ({ className }: { className?: string }) => (
-    <div
-        aria-hidden
-        className={cn('mask-radial-from-15% before:bg-foreground/25 after:bg-foreground/25 absolute size-3 before:absolute before:inset-0 before:m-auto before:h-px after:absolute after:inset-0 after:m-auto after:w-px', className)}
-    />
-)
-
-const Counter = ({ number }: { number: number }) => (
-    <div className="text-foreground mask-y-from-55% mask-x-from-55% @4xl:absolute top-0 flex size-6 -translate-x-1/3 -translate-y-1/2 items-center justify-center overflow-hidden rounded-full font-mono text-sm before:absolute before:inset-0 before:bg-[repeating-linear-gradient(-45deg,var(--color-foreground),var(--color-foreground)_0.5px,transparent_0.5px,transparent_3px)] before:opacity-35">
-        {number}
-    </div>
-)
-
-const SearchIllustration = () => (
-    <div className="relative">
-        <div className="absolute inset-1/3 m-auto aspect-video rounded-full bg-zinc-500/20 blur-3xl"></div>
-        <div className="relative rounded-xl border border-zinc-800 bg-zinc-900/80 p-4">
-            <div className="mb-3 flex items-center gap-2">
-                <Search className="size-4 text-zinc-400" />
-                <span className="text-sm text-zinc-400">Search criteria</span>
-            </div>
-            <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-500">Industry:</span>
-                    <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs">Technology</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-500">Location:</span>
-                    <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs">USA</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-500">Size:</span>
-                    <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs">50-200</span>
-                </div>
-            </div>
-        </div>
-    </div>
-)
-
-const EnrichIllustration = () => (
-    <div className="relative">
-        <div className="absolute inset-1/3 m-auto aspect-video rounded-full bg-zinc-500/20 blur-3xl"></div>
-        <div className="relative rounded-xl border border-zinc-800 bg-zinc-900/80 p-4">
-            <div className="mb-3 flex items-center gap-2">
-                <Users className="size-4 text-zinc-400" />
-                <span className="text-sm text-zinc-400">Enriched lead</span>
-            </div>
-            <div className="space-y-2">
-                <div className="h-2 w-3/4 rounded bg-zinc-700"></div>
-                <div className="flex items-center gap-2">
-                    <div className="size-2 rounded-full bg-green-500"></div>
-                    <span className="text-xs text-zinc-400">Email verified</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="size-2 rounded-full bg-green-500"></div>
-                    <span className="text-xs text-zinc-400">Phone found</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="size-2 rounded-full bg-green-500"></div>
-                    <span className="text-xs text-zinc-400">LinkedIn matched</span>
-                </div>
-            </div>
-        </div>
-    </div>
-)
-
-const CRMIllustration = () => (
-    <div className="relative">
-        <div className="absolute inset-1/3 m-auto aspect-video rounded-full bg-zinc-500/20 blur-3xl"></div>
-        <div className="relative rounded-xl border border-zinc-800 bg-zinc-900/80 p-4">
-            <div className="mb-3 flex items-center gap-2">
-                <Send className="size-4 text-zinc-400" />
-                <span className="text-sm text-zinc-400">CRM sync</span>
-            </div>
-            <div className="space-y-2">
-                <div className="flex items-center justify-between rounded bg-zinc-800/50 px-2 py-1">
-                    <span className="text-xs">TechCorp Inc.</span>
-                    <span className="text-xs text-green-400">Synced</span>
-                </div>
-                <div className="flex items-center justify-between rounded bg-zinc-800/50 px-2 py-1">
-                    <span className="text-xs">StartupXYZ</span>
-                    <span className="text-xs text-green-400">Synced</span>
-                </div>
-                <div className="flex items-center justify-between rounded bg-zinc-800/50 px-2 py-1">
-                    <span className="text-xs">GrowthCo</span>
-                    <span className="text-xs text-yellow-400">Pending</span>
-                </div>
-            </div>
-        </div>
-    </div>
-)

@@ -250,6 +250,94 @@ A Contra-inspired design system with minimal aesthetics, black primary actions, 
 </div>
 ```
 
+### Dialogs / Modals
+
+```tsx
+// Two-column dialog with decorative side panel
+<Dialog open={isOpen} onOpenChange={setIsOpen}>
+  <DialogContent className="gap-0 overflow-hidden border-black/10 bg-white p-0 dark:border-white/10 dark:bg-[#0a0a0f] sm:max-w-2xl">
+    <div className="grid md:grid-cols-2">
+      {/* Left side - Form */}
+      <div className="p-6 md:p-8">
+        <div className="mb-6">
+          <span className="text-xs font-medium text-black/40 dark:text-white/40">
+            Label
+          </span>
+          <h3 className="mt-1 text-xl font-semibold text-black dark:text-white">
+            Dialog Title
+          </h3>
+          <p className="mt-1 text-sm text-black/60 dark:text-white/60">
+            Description text here.
+          </p>
+        </div>
+        {/* Form content */}
+      </div>
+
+      {/* Right side - Decorative */}
+      <div className="relative hidden overflow-hidden bg-gradient-to-br from-[#f8f8f8] to-[#f0f0f0] dark:from-[#131318] dark:to-[#0a0a0f] md:block">
+        {/* Gradient orbs */}
+        <div className="absolute -right-20 -top-20 size-64 rounded-full bg-gradient-to-br from-violet-300/40 to-purple-400/30 blur-3xl dark:from-violet-500/20 dark:to-purple-600/10" />
+        <div className="absolute -bottom-10 -left-10 size-48 rounded-full bg-gradient-to-br from-rose-300/40 to-pink-400/30 blur-3xl dark:from-rose-500/20 dark:to-pink-600/10" />
+
+        {/* Content card */}
+        <div className="relative flex h-full flex-col items-center justify-center p-8">
+          <div className="rounded-2xl border border-black/5 bg-white/80 p-5 shadow-xl backdrop-blur-sm dark:border-white/10 dark:bg-white/5">
+            {/* Card content */}
+          </div>
+        </div>
+      </div>
+    </div>
+  </DialogContent>
+</Dialog>
+```
+
+### Form Inputs with Icons
+
+```tsx
+// Input with leading icon
+<div className="space-y-1.5">
+  <label className="text-xs font-medium text-black/70 dark:text-white/70">
+    Field Label
+  </label>
+  <div className="relative">
+    <Icon className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-black/30 dark:text-white/30" />
+    <Input
+      placeholder="Placeholder"
+      className="h-11 rounded-xl border-black/10 bg-black/[0.02] pl-10 text-black placeholder:text-black/40 dark:border-white/10 dark:bg-white/[0.02] dark:text-white dark:placeholder:text-white/40"
+    />
+  </div>
+</div>
+```
+
+### Gradient Orbs (Decorative Backgrounds)
+
+```tsx
+// Violet/purple orb
+<div className="absolute -right-20 -top-20 size-64 rounded-full bg-gradient-to-br from-violet-300/40 to-purple-400/30 blur-3xl dark:from-violet-500/20 dark:to-purple-600/10" />
+
+// Rose/pink orb
+<div className="absolute -bottom-10 -left-10 size-48 rounded-full bg-gradient-to-br from-rose-300/40 to-pink-400/30 blur-3xl dark:from-rose-500/20 dark:to-pink-600/10" />
+```
+
+### Gradient Outline (Credit Pills, Feature Icons)
+
+```tsx
+// Gradient outline pattern - outer wrapper with 1px padding
+<div className="rounded-full bg-gradient-to-r from-rose-200 via-purple-200 to-violet-300 p-px dark:from-rose-400/40 dark:via-purple-400/40 dark:to-violet-400/40">
+  <div className="flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 dark:bg-[#0a0a0f]">
+    <Icon className="size-3 text-violet-500" />
+    <span className="text-xs">Content</span>
+  </div>
+</div>
+
+// Gradient outline icon (circular)
+<div className="rounded-full bg-gradient-to-r from-rose-200 via-purple-200 to-violet-300 p-px transition-transform duration-300 hover:scale-110 dark:from-rose-400/40 dark:via-purple-400/40 dark:to-violet-400/40">
+  <div className="flex size-12 items-center justify-center rounded-full bg-[#f8f8f8] dark:bg-[#0a0a0f]">
+    <Icon className="size-5 text-black/70 dark:text-white/70" />
+  </div>
+</div>
+```
+
 ### Inputs
 
 ```tsx
@@ -320,11 +408,11 @@ A Contra-inspired design system with minimal aesthetics, black primary actions, 
 ### Don't
 - Use purple/colored buttons for primary actions
 - Use purple text for selected sidebar items (use black)
-- Use gradient buttons or backgrounds
-- Add decorative blur orbs or grid patterns
-- Use heavy shadows on cards
+- Use gradient buttons or backgrounds (except gradient outlines)
+- Add decorative blur orbs on main pages (only in modals/dialogs)
+- Use heavy shadows on cards (except modal decorative panels)
 - Use animated notification badges with colored pings
-- Use backdrop-blur effects
+- Use backdrop-blur on main pages (only in modal decorative cards)
 - Make typography too large
 
 ## Quick Reference

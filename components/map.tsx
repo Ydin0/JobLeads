@@ -50,27 +50,21 @@ const pins = [
 ]
 
 export const Map = () => {
-    const map = new DottedMap({ height: 55, grid: 'diagonal' })
+    const map = new DottedMap({ height: 44, grid: 'diagonal' })
 
     pins.forEach((pin) => {
         map.addPin({
             ...pin,
-            svgOptions: { color: 'oklch(76.5% 0.177 163.223)', radius: 0.15 },
+            svgOptions: { color: 'oklch(69.6% 0.17 162.48)', radius: 0.25 },
         })
     })
 
     const svgMap = map.getSVG({
         radius: 0.15,
-        color: 'oklch(37% 0.013 285.805)',
+        color: 'oklch(70.5% 0.015 286.067)',
         shape: 'circle',
         backgroundColor: 'transparent',
     })
 
-    return (
-        <img
-            src={`data:image/svg+xml;utf8,${encodeURIComponent(svgMap)}`}
-            alt="tailark stats map"
-            loading="lazy"
-        />
-    )
+    return <img src={`data:image/svg+xml;utf8,${encodeURIComponent(svgMap)}`} alt="World map" />
 }

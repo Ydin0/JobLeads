@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { SignOutButton, OrganizationSwitcher } from '@clerk/nextjs'
+import { SignOutButton } from '@clerk/nextjs'
 import { cn } from '@/lib/utils'
 import {
     LayoutDashboard,
@@ -93,26 +93,6 @@ export function DashboardSidebar() {
                         className="hidden h-7 w-auto dark:block"
                     />
                 </Link>
-            </div>
-
-            {/* Organization Switcher */}
-            <div className="border-b border-black/10 px-3 py-3 dark:border-white/10">
-                <OrganizationSwitcher
-                    hidePersonal
-                    afterCreateOrganizationUrl="/onboarding"
-                    afterSelectOrganizationUrl="/dashboard"
-                    createOrganizationUrl="/onboarding/create-organization"
-                    appearance={{
-                        elements: {
-                            rootBox: "w-full",
-                            organizationSwitcherTrigger:
-                                "w-full justify-between rounded-lg border border-black/10 bg-black/[0.02] px-3 py-2 hover:bg-black/5 dark:border-white/10 dark:bg-white/[0.02] dark:hover:bg-white/5",
-                            organizationPreviewMainIdentifier: "text-sm font-medium text-black dark:text-white",
-                            organizationPreviewSecondaryIdentifier: "text-black/50 dark:text-white/50",
-                            organizationSwitcherTriggerIcon: "text-black/50 dark:text-white/50",
-                        },
-                    }}
-                />
             </div>
 
             <nav className="flex flex-1 flex-col px-3 py-3">
