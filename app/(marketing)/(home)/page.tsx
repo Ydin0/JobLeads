@@ -40,7 +40,7 @@ const avatars = [
 ]
 
 export default function Home() {
-    const { client } = useClerk()
+    const clerk = useClerk()
     const [isDialogOpen, setIsDialogOpen] = React.useState(false)
     const [isSubmitting, setIsSubmitting] = React.useState(false)
     const [isSubmitted, setIsSubmitted] = React.useState(false)
@@ -60,15 +60,9 @@ export default function Home() {
         setError(null)
 
         try {
-            // Join the Clerk waitlist
-            await client?.signUp.create({
+            // Join the Clerk waitlist using the dedicated waitlist API
+            await clerk.joinWaitlist({
                 emailAddress: formData.email,
-                firstName: formData.name.split(' ')[0],
-                lastName: formData.name.split(' ').slice(1).join(' ') || undefined,
-                unsafeMetadata: {
-                    company: formData.company,
-                    role: formData.role,
-                },
             })
             setIsSubmitted(true)
         } catch (err: unknown) {
