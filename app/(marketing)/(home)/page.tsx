@@ -7,6 +7,7 @@ import { Zap, Sparkles, Users, User, Mail, Building2, Briefcase } from 'lucide-r
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { useClerk } from '@clerk/nextjs'
 import {
     Dialog,
     DialogContent,
@@ -39,9 +40,11 @@ const avatars = [
 ]
 
 export default function Home() {
+    const { client } = useClerk()
     const [isDialogOpen, setIsDialogOpen] = React.useState(false)
     const [isSubmitting, setIsSubmitting] = React.useState(false)
     const [isSubmitted, setIsSubmitted] = React.useState(false)
+    const [error, setError] = React.useState<string | null>(null)
     const [formData, setFormData] = React.useState({
         name: '',
         email: '',
@@ -54,10 +57,26 @@ export default function Home() {
         if (!formData.email || !formData.name) return
 
         setIsSubmitting(true)
-        // Simulate API call
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-        setIsSubmitting(false)
-        setIsSubmitted(true)
+        setError(null)
+
+        try {
+            // Join the Clerk waitlist
+            await client?.signUp.create({
+                emailAddress: formData.email,
+                firstName: formData.name.split(' ')[0],
+                lastName: formData.name.split(' ').slice(1).join(' ') || undefined,
+                unsafeMetadata: {
+                    company: formData.company,
+                    role: formData.role,
+                },
+            })
+            setIsSubmitted(true)
+        } catch (err: unknown) {
+            const clerkError = err as { errors?: Array<{ message: string }> }
+            setError(clerkError.errors?.[0]?.message || 'Something went wrong. Please try again.')
+        } finally {
+            setIsSubmitting(false)
+        }
     }
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,7 +144,10 @@ export default function Home() {
                         </Button>
                     </Link>
                     <Button
-                        onClick={() => setIsDialogOpen(true)}
+                        onClick={() => {
+                            setError(null)
+                            setIsDialogOpen(true)
+                        }}
                         className="h-11 rounded-full bg-black px-6 text-sm font-medium text-white hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/90"
                     >
                         Join Waitlist
@@ -283,6 +305,11 @@ export default function Home() {
                                                 />
                                             </div>
                                         </div>
+                                        {error && (
+                                            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
+                                                {error}
+                                            </div>
+                                        )}
                                         <Button
                                             type="submit"
                                             disabled={isSubmitting}
