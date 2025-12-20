@@ -91,14 +91,14 @@ export default function Home() {
             {/* Header */}
             <header className="relative flex items-center justify-center px-6 py-6">
                 <Image
-                    src="/logolight.svg"
+                    src="/LogoLight.svg"
                     alt="Leadey"
                     width={120}
                     height={32}
                     className="h-8 w-auto dark:hidden"
                 />
                 <Image
-                    src="/logodark.svg"
+                    src="/LogoDark.svg"
                     alt="Leadey"
                     width={120}
                     height={32}
