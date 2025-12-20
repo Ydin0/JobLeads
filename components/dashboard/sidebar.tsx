@@ -19,8 +19,21 @@ import {
 } from 'lucide-react'
 import { PricingModal } from './pricing-modal'
 
+// Navigation item type
+interface NavItem {
+    name: string
+    href: string
+    icon: React.ComponentType<{ className?: string }>
+    comingSoon?: boolean
+}
+
+interface NavSection {
+    label: string
+    items: NavItem[]
+}
+
 // Grouped navigation sections (Contra-style)
-const navigationSections = [
+const navigationSections: NavSection[] = [
     {
         label: 'CORE',
         items: [
@@ -31,14 +44,14 @@ const navigationSections = [
     {
         label: 'LEADS',
         items: [
-            { name: 'Prospects', href: '/dashboard/prospects', icon: Users },
-            { name: 'Leads', href: '/dashboard/leads', icon: Contact, badge: 'NEW' },
+            { name: 'Prospects', href: '/dashboard/prospects', icon: Users, comingSoon: true },
+            { name: 'Leads', href: '/dashboard/leads', icon: Contact, comingSoon: true },
         ]
     },
     {
         label: 'DATA',
         items: [
-            { name: 'Import', href: '/dashboard/import', icon: Upload },
+            { name: 'Import', href: '/dashboard/import', icon: Upload, comingSoon: true },
         ]
     },
     {
@@ -66,11 +79,18 @@ export function DashboardSidebar() {
             <div className="flex h-14 items-center border-b border-black/10 px-6 dark:border-white/10">
                 <Link href="/dashboard">
                     <Image
-                        src="/Group.svg"
+                        src="/LogoLight.svg"
                         alt="RecLead"
-                        width={100}
-                        height={24}
-                        className="h-6 w-auto dark:invert-0 invert"
+                        width={120}
+                        height={28}
+                        className="h-7 w-auto dark:hidden"
+                    />
+                    <Image
+                        src="/LogoDark.svg"
+                        alt="RecLead"
+                        width={120}
+                        height={28}
+                        className="hidden h-7 w-auto dark:block"
                     />
                 </Link>
             </div>
@@ -87,7 +107,7 @@ export function DashboardSidebar() {
                             rootBox: "w-full",
                             organizationSwitcherTrigger:
                                 "w-full justify-between rounded-lg border border-black/10 bg-black/[0.02] px-3 py-2 hover:bg-black/5 dark:border-white/10 dark:bg-white/[0.02] dark:hover:bg-white/5",
-                            organizationPreviewMainIdentifier: "text-sm font-medium",
+                            organizationPreviewMainIdentifier: "text-sm font-medium text-black dark:text-white",
                             organizationPreviewSecondaryIdentifier: "text-black/50 dark:text-white/50",
                             organizationSwitcherTriggerIcon: "text-black/50 dark:text-white/50",
                         },
@@ -111,6 +131,22 @@ export function DashboardSidebar() {
                                     const isActive = item.href === '/dashboard'
                                         ? pathname === item.href
                                         : pathname.startsWith(item.href)
+
+                                    // Coming soon items are not clickable
+                                    if (item.comingSoon) {
+                                        return (
+                                            <li key={item.name}>
+                                                <div className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium text-black/30 dark:text-white/30">
+                                                    <item.icon className="size-4 text-black/20 dark:text-white/20" />
+                                                    <span>{item.name}</span>
+                                                    <span className="ml-auto rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium text-black/40 dark:bg-white/5 dark:text-white/40">
+                                                        Soon
+                                                    </span>
+                                                </div>
+                                            </li>
+                                        )
+                                    }
+
                                     return (
                                         <li key={item.name}>
                                             <Link
@@ -126,11 +162,6 @@ export function DashboardSidebar() {
                                                     isActive ? "text-black dark:text-white" : "text-black/40 dark:text-white/40"
                                                 )} />
                                                 <span>{item.name}</span>
-                                                {item.badge && (
-                                                    <span className="ml-auto rounded-full bg-[#EDE9FE] px-2 py-0.5 text-[10px] font-medium text-[#7C3AED] dark:bg-purple-500/20 dark:text-purple-300">
-                                                        {item.badge}
-                                                    </span>
-                                                )}
                                             </Link>
                                         </li>
                                     )

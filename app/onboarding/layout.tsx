@@ -19,7 +19,7 @@ export default function OnboardingLayout({
                 <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
                     <Link href="/">
                         <Image
-                            src="/Group.svg"
+                            src="/LogoDark.svg"
                             alt="RecLead"
                             width={100}
                             height={24}

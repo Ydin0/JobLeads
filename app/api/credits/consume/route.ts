@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
-import { creditUsage } from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { creditUsage, organizationMembers, creditHistory } from "@/lib/db/schema";
+import { eq, and, sql } from "drizzle-orm";
+import { checkMemberCredits } from "@/lib/auth";
 
 // POST /api/credits/consume - Consume credits
 export async function POST(request: Request) {
@@ -17,7 +18,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { type, amount } = body;
+    const { type, amount, description, transactionType, searchId, companyId, metadata } = body;
 
     if (!type || !["enrichment", "icp"].includes(type)) {
       return NextResponse.json(
@@ -33,7 +34,22 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get current credit usage
+    // Check member-level limits first
+    const memberCheck = await checkMemberCredits(userId, orgId, type, amount);
+
+    if (!memberCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: memberCheck.reason,
+          remaining: memberCheck.remaining,
+          limitType: "member",
+          type,
+        },
+        { status: 402 } // Payment Required
+      );
+    }
+
+    // Get current org credit usage
     let credits = await db.query.creditUsage.findFirst({
       where: eq(creditUsage.orgId, orgId),
     });
@@ -67,6 +83,7 @@ export async function POST(request: Request) {
       const cycleEnd = new Date(now);
       cycleEnd.setMonth(cycleEnd.getMonth() + 1);
 
+      // Reset org credits
       const [updatedCredits] = await db
         .update(creditUsage)
         .set({
@@ -80,9 +97,19 @@ export async function POST(request: Request) {
         .returning();
 
       credits = updatedCredits;
+
+      // Also reset all member usage for this org
+      await db
+        .update(organizationMembers)
+        .set({
+          enrichmentUsed: 0,
+          icpUsed: 0,
+          updatedAt: now,
+        })
+        .where(eq(organizationMembers.orgId, orgId));
     }
 
-    // Check if enough credits are available
+    // Check if enough org credits are available
     const currentUsed = type === "enrichment" ? credits.enrichmentUsed : credits.icpUsed;
     const limit = type === "enrichment" ? credits.enrichmentLimit : credits.icpLimit;
     const remaining = limit - currentUsed;
@@ -90,42 +117,77 @@ export async function POST(request: Request) {
     if (remaining < amount) {
       return NextResponse.json(
         {
-          error: "Insufficient credits",
+          error: "Insufficient organization credits",
           required: amount,
           remaining,
+          limitType: "organization",
           type,
         },
         { status: 402 } // Payment Required
       );
     }
 
-    // Consume credits using atomic update
-    const updateField =
+    // Consume credits at both org and member level atomically
+    const orgUpdateField =
       type === "enrichment"
         ? { enrichmentUsed: sql`${creditUsage.enrichmentUsed} + ${amount}` }
         : { icpUsed: sql`${creditUsage.icpUsed} + ${amount}` };
 
-    const [updated] = await db
+    const memberUpdateField =
+      type === "enrichment"
+        ? { enrichmentUsed: sql`${organizationMembers.enrichmentUsed} + ${amount}` }
+        : { icpUsed: sql`${organizationMembers.icpUsed} + ${amount}` };
+
+    // Update org credits
+    const [updatedOrgCredits] = await db
       .update(creditUsage)
       .set({
-        ...updateField,
+        ...orgUpdateField,
         updatedAt: now,
       })
       .where(eq(creditUsage.orgId, orgId))
       .returning();
 
+    // Update member credits
+    await db
+      .update(organizationMembers)
+      .set({
+        ...memberUpdateField,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(organizationMembers.orgId, orgId),
+          eq(organizationMembers.userId, userId)
+        )
+      );
+
     const newRemaining =
       type === "enrichment"
-        ? updated.enrichmentLimit - updated.enrichmentUsed
-        : updated.icpLimit - updated.icpUsed;
+        ? updatedOrgCredits.enrichmentLimit - updatedOrgCredits.enrichmentUsed
+        : updatedOrgCredits.icpLimit - updatedOrgCredits.icpUsed;
+
+    // Record credit history
+    await db.insert(creditHistory).values({
+      orgId,
+      userId,
+      creditType: type,
+      transactionType: transactionType || (type === "enrichment" ? "employee_fetch" : "manual"),
+      creditsUsed: amount,
+      balanceAfter: newRemaining,
+      description: description || `${type === "enrichment" ? "Enrichment" : "ICP"} credit usage`,
+      searchId: searchId || null,
+      companyId: companyId || null,
+      metadata: metadata || null,
+    });
 
     return NextResponse.json({
       success: true,
       type,
       consumed: amount,
       remaining: newRemaining,
-      used: type === "enrichment" ? updated.enrichmentUsed : updated.icpUsed,
-      limit: type === "enrichment" ? updated.enrichmentLimit : updated.icpLimit,
+      used: type === "enrichment" ? updatedOrgCredits.enrichmentUsed : updatedOrgCredits.icpUsed,
+      limit: type === "enrichment" ? updatedOrgCredits.enrichmentLimit : updatedOrgCredits.icpLimit,
     });
   } catch (error) {
     console.error("Error consuming credits:", error);

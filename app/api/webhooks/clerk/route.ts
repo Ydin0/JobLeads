@@ -156,7 +156,7 @@ export async function POST(req: Request) {
           },
         });
 
-      // Now create the membership
+      // Now create the membership with initialized credit fields
       const memberRole = role === "org:admin" ? "admin" : role === "org:member" ? "member" : "owner";
 
       await db
@@ -165,6 +165,12 @@ export async function POST(req: Request) {
           orgId: organization.id,
           userId: public_user_data.user_id,
           role: memberRole,
+          // Initialize credit tracking fields
+          enrichmentLimit: null, // null = unlimited (use org limits)
+          icpLimit: null, // null = unlimited
+          enrichmentUsed: 0,
+          icpUsed: 0,
+          isBlocked: false,
         })
         .onConflictDoNothing();
     }
@@ -190,6 +196,7 @@ export async function POST(req: Request) {
         .update(organizationMembers)
         .set({
           role: memberRole,
+          updatedAt: new Date(),
         })
         .where(
           and(

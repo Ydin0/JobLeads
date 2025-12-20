@@ -1,7 +1,13 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import {
     Target,
@@ -19,22 +25,21 @@ import {
     Lightbulb,
     ArrowRight,
     AlertCircle,
+    RefreshCw,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useSearches } from '@/hooks/use-searches'
 import { useCompanies } from '@/hooks/use-companies'
 import { useLeads } from '@/hooks/use-leads'
 import { useCredits } from '@/hooks/use-credits'
+import { useDashboardSuggestions } from '@/hooks/use-dashboard-suggestions'
 import { useUser, useOrganization } from '@clerk/nextjs'
+import type { DashboardSuggestion } from '@/lib/ai-suggestions'
 
-interface CompanyMetadata {
-    linkedinId?: string
-    jobCount?: number
-}
 
 export default function DashboardPage() {
     const { searches, isLoading: searchesLoading } = useSearches()
-    const { companies, isLoading: companiesLoading } = useCompanies()
+    const { companies, isLoading: companiesLoading, pagination: companiesPagination } = useCompanies()
     const { leads, isLoading: leadsLoading } = useLeads()
     const { enrichmentRemaining, icpRemaining, isLoading: creditsLoading } = useCredits()
     const { user } = useUser()
@@ -50,24 +55,24 @@ export default function DashboardPage() {
     const icps = searches
 
     // Calculate stats
-    const totalCompanies = companies.length
-    const totalContacts = leads.length
-    const activeSearches = searches.filter(s => s.status === 'active').length
-
-    // Credits from API
-    const enrichmentCreditsRemaining = enrichmentRemaining
-    const icpCreditsRemaining = icpRemaining
+    const totalCompanies = companiesPagination.totalCount
+    const totalLeads = leads.length
 
     // Get recent activity from leads and searches
     const recentActivity = generateRecentActivity(leads, searches, companies)
 
-    // Generate AI suggestions based on real data
-    const aiSuggestions = useMemo(() => generateAISuggestions(
-        companies,
-        leads,
-        searches,
-        { enrichmentRemaining: enrichmentCreditsRemaining, icpRemaining: icpCreditsRemaining }
-    ), [companies, leads, searches, enrichmentCreditsRemaining, icpCreditsRemaining])
+    // AI Suggestions from API (rule-based + AI-generated)
+    const {
+        suggestions: aiSuggestions,
+        aiSuggestions: aiGeneratedSuggestions,
+        generatedAtFormatted,
+        refreshesRemaining,
+        isRefreshing,
+        refreshAI,
+    } = useDashboardSuggestions()
+
+    // Selected suggestion for dialog
+    const [selectedSuggestion, setSelectedSuggestion] = useState<DashboardSuggestion | null>(null)
 
     // Get team members
     const teamMembers = memberships?.data || []
@@ -126,8 +131,8 @@ export default function DashboardPage() {
                 </div>
                 <div className="h-8 w-px bg-black/10 dark:bg-white/10" />
                 <div>
-                    <div className="text-2xl font-semibold text-black dark:text-white">{totalContacts}</div>
-                    <div className="mt-0.5 text-xs text-black/50 dark:text-white/50">Contacts</div>
+                    <div className="text-2xl font-semibold text-black dark:text-white">{totalLeads}</div>
+                    <div className="mt-0.5 text-xs text-black/50 dark:text-white/50">Leads</div>
                 </div>
             </div>
 
@@ -201,53 +206,79 @@ export default function DashboardPage() {
                     {/* AI Suggestions - Fills remaining space with gradient border */}
                     <div className="flex-1 rounded-2xl bg-gradient-to-r from-rose-200 via-purple-200 to-violet-300 p-[2px] dark:from-rose-400/40 dark:via-purple-400/40 dark:to-violet-400/40">
                         <div className="h-full rounded-[14px] bg-white dark:bg-[#0a0a0f]">
-                            <div className="flex items-center gap-2 border-b border-black/5 px-4 py-3 dark:border-white/5">
-                                <Sparkles className="size-4 text-violet-500" />
-                                <h2 className="text-sm font-medium text-black dark:text-white">AI Suggestions</h2>
-                                <span className="ml-1 rounded-full bg-gradient-to-r from-rose-100 to-violet-100 px-1.5 py-0.5 text-[9px] font-medium text-violet-600 dark:from-rose-500/20 dark:to-violet-500/20 dark:text-violet-400">
-                                    Pro
-                                </span>
+                            <div className="flex items-center justify-between border-b border-black/5 px-4 py-3 dark:border-white/5">
+                                <div className="flex items-center gap-2">
+                                    <Sparkles className="size-4 text-violet-500" />
+                                    <h2 className="text-sm font-medium text-black dark:text-white">AI Suggestions</h2>
+                                    {aiGeneratedSuggestions.length > 0 && (
+                                        <span className="rounded-full bg-gradient-to-r from-rose-100 to-violet-100 px-1.5 py-0.5 text-[9px] font-medium text-violet-600 dark:from-rose-500/20 dark:to-violet-500/20 dark:text-violet-400">
+                                            AI
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {aiGeneratedSuggestions.length > 0 && (
+                                        <span className="text-[10px] text-black/40 dark:text-white/40">
+                                            {generatedAtFormatted}
+                                        </span>
+                                    )}
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => refreshAI()}
+                                        disabled={isRefreshing || refreshesRemaining <= 0}
+                                        className="h-7 gap-1.5 px-2 text-[10px] text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white"
+                                    >
+                                        <RefreshCw className={cn("size-3", isRefreshing && "animate-spin")} />
+                                        {refreshesRemaining > 0 ? `Refresh (${refreshesRemaining})` : 'No refreshes'}
+                                    </Button>
+                                </div>
                             </div>
                         <div className="p-4">
                             {aiSuggestions.length > 0 ? (
                                 <div className="grid gap-3 sm:grid-cols-2">
-                                    {aiSuggestions.map((suggestion, index) => (
-                                        <div
+                                    {aiSuggestions.slice(0, 4).map((suggestion, index) => (
+                                        <button
                                             key={index}
+                                            onClick={() => setSelectedSuggestion(suggestion)}
                                             className={cn(
-                                                "flex items-start gap-3 rounded-xl border p-4 transition-colors",
+                                                "flex h-[120px] gap-3 rounded-xl border p-3 transition-colors text-left cursor-pointer",
                                                 suggestion.priority === 'high'
-                                                    ? "border-black/20 bg-black/[0.02] dark:border-white/20 dark:bg-white/[0.02]"
-                                                    : "border-black/5 bg-black/[0.01] hover:border-black/10 dark:border-white/5 dark:bg-white/[0.01] dark:hover:border-white/10"
+                                                    ? "border-black/20 bg-black/[0.02] hover:bg-black/[0.04] dark:border-white/20 dark:bg-white/[0.02] dark:hover:bg-white/[0.04]"
+                                                    : "border-black/5 bg-black/[0.01] hover:border-black/10 hover:bg-black/[0.02] dark:border-white/5 dark:bg-white/[0.01] dark:hover:border-white/10 dark:hover:bg-white/[0.02]"
                                             )}
                                         >
-                                            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-black/5 dark:bg-white/5">
-                                                {suggestion.type === 'action' && <ArrowRight className="size-4 text-black/60 dark:text-white/60" />}
-                                                {suggestion.type === 'insight' && <TrendingUp className="size-4 text-black/60 dark:text-white/60" />}
-                                                {suggestion.type === 'tip' && <Lightbulb className="size-4 text-black/60 dark:text-white/60" />}
-                                                {suggestion.type === 'warning' && <AlertCircle className="size-4 text-black/60 dark:text-white/60" />}
+                                            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-black/5 dark:bg-white/5">
+                                                {suggestion.type === 'action' && <ArrowRight className="size-3.5 text-black/60 dark:text-white/60" />}
+                                                {suggestion.type === 'insight' && <TrendingUp className="size-3.5 text-black/60 dark:text-white/60" />}
+                                                {suggestion.type === 'tip' && <Lightbulb className="size-3.5 text-black/60 dark:text-white/60" />}
+                                                {suggestion.type === 'warning' && <AlertCircle className="size-3.5 text-black/60 dark:text-white/60" />}
                                             </div>
-                                            <div className="flex-1 min-w-0">
+                                            <div className="flex flex-1 flex-col min-w-0">
                                                 <div className="flex items-start justify-between gap-2">
-                                                    <p className="text-sm font-medium text-black dark:text-white">{suggestion.title}</p>
-                                                    {suggestion.priority === 'high' && (
-                                                        <span className="shrink-0 rounded-full bg-black px-1.5 py-0.5 text-[9px] font-medium text-white dark:bg-white dark:text-black">
-                                                            Priority
-                                                        </span>
-                                                    )}
+                                                    <p className="text-xs font-medium text-black dark:text-white line-clamp-1">{suggestion.title}</p>
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                        {suggestion.aiGenerated && (
+                                                            <span className="rounded-full bg-gradient-to-r from-rose-100 to-violet-100 px-1.5 py-0.5 text-[8px] font-medium text-violet-600 dark:from-rose-500/20 dark:to-violet-500/20 dark:text-violet-400">
+                                                                AI
+                                                            </span>
+                                                        )}
+                                                        {suggestion.priority === 'high' && (
+                                                            <span className="rounded-full bg-black px-1.5 py-0.5 text-[8px] font-medium text-white dark:bg-white dark:text-black">
+                                                                Priority
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <p className="mt-1 text-xs leading-relaxed text-black/50 dark:text-white/50">{suggestion.description}</p>
+                                                <p className="mt-1 text-[11px] leading-relaxed text-black/50 dark:text-white/50 line-clamp-2">{suggestion.description}</p>
                                                 {suggestion.action && (
-                                                    <Link
-                                                        href={suggestion.action.href}
-                                                        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-black hover:underline dark:text-white"
-                                                    >
+                                                    <span className="mt-auto inline-flex items-center gap-1 text-[11px] font-medium text-black dark:text-white">
                                                         {suggestion.action.label}
                                                         <ArrowRight className="size-3" />
-                                                    </Link>
+                                                    </span>
                                                 )}
                                             </div>
-                                        </div>
+                                        </button>
                                     ))}
                                 </div>
                             ) : (
@@ -353,6 +384,59 @@ export default function DashboardPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Suggestion Detail Dialog */}
+            <Dialog open={!!selectedSuggestion} onOpenChange={(open) => !open && setSelectedSuggestion(null)}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <div className="flex items-center gap-3">
+                            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-black/5 dark:bg-white/5">
+                                {selectedSuggestion?.type === 'action' && <ArrowRight className="size-5 text-black/60 dark:text-white/60" />}
+                                {selectedSuggestion?.type === 'insight' && <TrendingUp className="size-5 text-black/60 dark:text-white/60" />}
+                                {selectedSuggestion?.type === 'tip' && <Lightbulb className="size-5 text-black/60 dark:text-white/60" />}
+                                {selectedSuggestion?.type === 'warning' && <AlertCircle className="size-5 text-black/60 dark:text-white/60" />}
+                            </div>
+                            <div className="flex-1">
+                                <DialogTitle className="text-base">{selectedSuggestion?.title}</DialogTitle>
+                                <div className="mt-1 flex items-center gap-2">
+                                    {selectedSuggestion?.aiGenerated && (
+                                        <span className="rounded-full bg-gradient-to-r from-rose-100 to-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-600 dark:from-rose-500/20 dark:to-violet-500/20 dark:text-violet-400">
+                                            AI Generated
+                                        </span>
+                                    )}
+                                    {selectedSuggestion?.priority === 'high' && (
+                                        <span className="rounded-full bg-black px-2 py-0.5 text-[10px] font-medium text-white dark:bg-white dark:text-black">
+                                            Priority
+                                        </span>
+                                    )}
+                                    <span className="text-xs text-black/40 capitalize dark:text-white/40">
+                                        {selectedSuggestion?.type}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </DialogHeader>
+
+                    <div className="mt-4">
+                        <p className="text-sm leading-relaxed text-black/70 dark:text-white/70">
+                            {selectedSuggestion?.description}
+                        </p>
+                    </div>
+
+                    {selectedSuggestion?.action && (
+                        <div className="mt-6">
+                            <Link
+                                href={selectedSuggestion.action.href}
+                                onClick={() => setSelectedSuggestion(null)}
+                                className="inline-flex h-9 items-center justify-center gap-2 rounded-full bg-black px-4 text-sm font-medium text-white hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                            >
+                                {selectedSuggestion.action.label}
+                                <ArrowRight className="size-4" />
+                            </Link>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
@@ -422,130 +506,3 @@ function generateRecentActivity(
     return activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 }
 
-// AI Suggestion types
-interface AISuggestion {
-    type: 'action' | 'insight' | 'tip' | 'warning'
-    priority: 'high' | 'normal'
-    title: string
-    description: string
-    action?: {
-        label: string
-        href: string
-    }
-}
-
-// Generate AI suggestions based on user data
-function generateAISuggestions(
-    companies: Array<{ id: string; name: string; isEnriched: boolean | null; metadata?: unknown }>,
-    leads: Array<{ id: string; firstName: string; lastName: string; jobTitle?: string | null }>,
-    searches: Array<{ id: string; name: string; status: string; resultsCount: number | null }>,
-    credits: { enrichmentRemaining: number; icpRemaining: number }
-): AISuggestion[] {
-    const suggestions: AISuggestion[] = []
-
-    // Get companies with job postings (hiring signal)
-    const companiesWithJobs = companies.filter(c => {
-        const meta = c.metadata as { jobCount?: number } | null
-        return meta?.jobCount && meta.jobCount > 0
-    })
-
-    // Get unenriched companies
-    const unenrichedCompanies = companies.filter(c => !c.isEnriched)
-
-    // 1. Credit warnings
-    if (credits.enrichmentRemaining < 20) {
-        suggestions.push({
-            type: 'warning',
-            priority: 'high',
-            title: 'Low enrichment credits',
-            description: `Only ${credits.enrichmentRemaining} enrichment credits remaining. Upgrade to continue enriching contacts.`,
-            action: { label: 'Upgrade plan', href: '/dashboard/settings' }
-        })
-    }
-
-    if (credits.icpRemaining < 100) {
-        suggestions.push({
-            type: 'warning',
-            priority: 'high',
-            title: 'Low ICP credits',
-            description: `Only ${credits.icpRemaining} ICP credits remaining. Upgrade to find more companies.`,
-            action: { label: 'Upgrade plan', href: '/dashboard/settings' }
-        })
-    }
-
-    // 2. Action suggestions based on data
-    if (unenrichedCompanies.length > 5 && credits.enrichmentRemaining > 10) {
-        const topUnenriched = unenrichedCompanies.slice(0, 3).map(c => c.name).join(', ')
-        suggestions.push({
-            type: 'action',
-            priority: 'high',
-            title: `Enrich ${unenrichedCompanies.length} companies`,
-            description: `${topUnenriched} and ${unenrichedCompanies.length - 3} more companies have hiring signals but no contact data yet.`,
-            action: { label: 'View companies', href: '/dashboard/companies' }
-        })
-    }
-
-    if (companiesWithJobs.length > 0) {
-        const highJobCount = companiesWithJobs.filter(c => {
-            const meta = c.metadata as { jobCount?: number } | null
-            return meta?.jobCount && meta.jobCount >= 5
-        })
-        if (highJobCount.length > 0) {
-            suggestions.push({
-                type: 'insight',
-                priority: 'high',
-                title: `${highJobCount.length} companies are rapidly hiring`,
-                description: `These companies have 5+ open positions - a strong buying signal. Consider prioritizing outreach to their decision makers.`,
-                action: { label: 'View hot leads', href: '/dashboard/leads' }
-            })
-        }
-    }
-
-    // 3. Tips based on usage patterns
-    if (searches.length === 0) {
-        suggestions.push({
-            type: 'tip',
-            priority: 'normal',
-            title: 'Create your first ICP',
-            description: 'Define your ideal customer profile to start finding companies that match your target market.',
-            action: { label: 'Create ICP', href: '/dashboard/icps/new' }
-        })
-    } else if (searches.length < 3) {
-        suggestions.push({
-            type: 'tip',
-            priority: 'normal',
-            title: 'Add more ICPs for better coverage',
-            description: 'Companies typically have 3-5 ICPs. Adding more helps you discover different market segments.',
-            action: { label: 'Create ICP', href: '/dashboard/icps/new' }
-        })
-    }
-
-    if (leads.length > 0 && leads.length < 20) {
-        suggestions.push({
-            type: 'tip',
-            priority: 'normal',
-            title: 'Build your contact pipeline',
-            description: `You have ${leads.length} contacts. Aim for 50+ contacts per ICP for effective outreach campaigns.`,
-            action: { label: 'Find more contacts', href: '/dashboard/people' }
-        })
-    }
-
-    // 4. Insights from data patterns
-    if (companies.length > 10) {
-        const enrichedPercent = Math.round((companies.filter(c => c.isEnriched).length / companies.length) * 100)
-        if (enrichedPercent < 30) {
-            suggestions.push({
-                type: 'insight',
-                priority: 'normal',
-                title: `Only ${enrichedPercent}% of companies enriched`,
-                description: 'Enriching more companies reveals decision-maker contacts and increases your outreach opportunities.',
-                action: { label: 'Enrich companies', href: '/dashboard/companies' }
-            })
-        }
-    }
-
-    // Limit to 4 suggestions max, prioritize high priority ones
-    return suggestions
-        .sort((a, b) => (a.priority === 'high' ? -1 : 1) - (b.priority === 'high' ? -1 : 1))
-        .slice(0, 4)
-}

@@ -77,6 +77,91 @@ export async function runLinkedInJobsSearch(
   return items as unknown as LinkedInJobResult[];
 }
 
+// LinkedIn Company/Profile Scraper Actor ID
+export const LINKEDIN_COMPANY_ACTOR_ID = "od6RadQV98FOARtrp";
+
+// Types for LinkedIn Company Scraper
+export interface LinkedInCompanyScraperInput {
+  action: "get-companies";
+  keywords: string[]; // LinkedIn URLs when isUrl is true
+  isUrl: boolean;
+  isName: boolean;
+  limit: number;
+}
+
+// Response from LinkedIn Company Scraper
+export interface LinkedInCompanyResult {
+  urn: string; // "urn:li:fsd_company:106234599"
+  url: string; // LinkedIn company URL
+  name: string;
+  avatar?: string; // Company logo URL
+  tagline?: string;
+  description?: string;
+  industry?: string[]; // Array of industries
+  websiteUrl?: string;
+  headquarter?: {
+    description?: string;
+    country?: string;
+    city?: string;
+    postalCode?: string | null;
+  };
+  hashtag?: string[];
+  employeeCount?: number;
+  followerCount?: number;
+}
+
+// Clean LinkedIn URL by removing query parameters and normalizing to www.linkedin.com
+function cleanLinkedInUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    // Remove query parameters
+    parsed.search = "";
+    // Normalize all country-specific subdomains to www.linkedin.com
+    // e.g., uk.linkedin.com, ph.linkedin.com -> www.linkedin.com
+    if (parsed.hostname.endsWith('.linkedin.com')) {
+      parsed.hostname = 'www.linkedin.com';
+    }
+    // Ensure trailing slash is removed
+    const cleanUrl = parsed.toString().replace(/\/$/, "");
+    return cleanUrl;
+  } catch {
+    // If URL parsing fails, try basic normalization
+    const cleanUrl = url.split("?")[0].replace(/\/$/, "").replace(/https?:\/\/[a-z]{2}\.linkedin\.com/i, 'https://www.linkedin.com');
+    return cleanUrl;
+  }
+}
+
+// Batch scrape company profiles by LinkedIn URLs
+export async function scrapeCompanyProfiles(
+  linkedinUrls: string[]
+): Promise<LinkedInCompanyResult[]> {
+  if (linkedinUrls.length === 0) {
+    return [];
+  }
+
+  // Clean URLs before sending to Apify
+  const cleanedUrls = linkedinUrls.map(cleanLinkedInUrl);
+  console.log(`[Apify] Scraping ${cleanedUrls.length} company profiles...`);
+
+  const input: LinkedInCompanyScraperInput = {
+    action: "get-companies",
+    keywords: cleanedUrls,
+    isUrl: true,
+    isName: false,
+    limit: cleanedUrls.length,
+  };
+
+  console.log("[Apify] Running company scraper with input:", JSON.stringify(input, null, 2));
+
+  const run = await apifyClient.actor(LINKEDIN_COMPANY_ACTOR_ID).call(input);
+  console.log("[Apify] Company scraper completed. Run ID:", run.id, "Dataset ID:", run.defaultDatasetId);
+
+  const { items } = await apifyClient.dataset(run.defaultDatasetId).listItems();
+  console.log("[Apify] Fetched", items.length, "company profiles from dataset");
+
+  return items as unknown as LinkedInCompanyResult[];
+}
+
 // Extract unique companies from job results
 export function extractCompaniesFromJobs(jobs: LinkedInJobResult[]) {
   const companiesMap = new Map<

@@ -36,12 +36,12 @@ function InsightCard({
             icon: 'bg-black/5 text-black/60 dark:bg-white/10 dark:text-white/60',
         },
         accent: {
-            card: 'border-[var(--theme-accent)]/20 bg-[var(--theme-accent)]/5 dark:border-purple-500/20 dark:bg-purple-500/5',
-            icon: 'bg-[var(--theme-accent)]/10 text-[var(--theme-accent)] dark:bg-purple-500/20 dark:text-purple-400',
+            card: 'border-black/10 bg-[#F8F7FF] dark:border-white/10 dark:bg-white/5',
+            icon: 'bg-black/5 text-black/60 dark:bg-white/10 dark:text-white/60',
         },
         warning: {
-            card: 'border-yellow-500/20 bg-yellow-500/5',
-            icon: 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
+            card: 'border-black/10 bg-amber-50 dark:border-white/10 dark:bg-amber-500/10',
+            icon: 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400',
         },
     }
 
@@ -77,14 +77,16 @@ export function AIInsightsSection({ insights, className, onRegenerate, isRegener
         <div className={cn('space-y-3', className)}>
             {/* Header */}
             <div className="flex items-center gap-2">
-                <div className="flex size-6 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--theme-accent)] to-red-500 dark:from-purple-500 dark:to-blue-500">
-                    <Sparkles className="size-3 text-white" />
+                <div className="rounded-lg bg-gradient-to-r from-rose-200 via-purple-200 to-violet-300 p-[1px] dark:from-rose-400/40 dark:via-purple-400/40 dark:to-violet-400/40">
+                    <div className="flex size-6 items-center justify-center rounded-lg bg-white dark:bg-[#0a0a0f]">
+                        <Sparkles className="size-3 text-black/60 dark:text-white/60" />
+                    </div>
                 </div>
                 <span className="text-xs font-medium text-black dark:text-white">
                     AI-Generated Insights
                 </span>
-                <span className="rounded-full bg-[var(--theme-accent)]/10 px-1.5 py-0.5 text-[9px] font-medium text-[var(--theme-accent)] dark:bg-purple-500/10 dark:text-purple-400">
-                    GPT-5 mini
+                <span className="rounded-full bg-black/5 px-1.5 py-0.5 text-[9px] font-medium text-black/50 dark:bg-white/10 dark:text-white/50">
+                    GPT-4o mini
                 </span>
                 {onRegenerate && (
                     <Button
@@ -132,10 +134,10 @@ export function AIInsightsSection({ insights, className, onRegenerate, isRegener
 
             {/* Competitive Intel */}
             {insights.competitiveIntel && (
-                <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
+                <div className="rounded-lg border border-black/5 bg-black/[0.01] p-3 dark:border-white/5 dark:bg-white/[0.01]">
                     <div className="flex items-start gap-2.5">
-                        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-cyan-500/10">
-                            <Target className="size-3.5 text-cyan-600 dark:text-cyan-400" />
+                        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-black/5 dark:bg-white/10">
+                            <Target className="size-3.5 text-black/60 dark:text-white/60" />
                         </div>
                         <div>
                             <h4 className="text-xs font-medium text-black dark:text-white">

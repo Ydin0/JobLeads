@@ -9,6 +9,7 @@ import {
   boolean,
   pgEnum,
   index,
+  unique,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -66,7 +67,24 @@ export const organizationMembers = pgTable("organization_members", {
   userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "cascade" }),
   role: memberRoleEnum("role").default("member").notNull(),
   joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow().notNull(),
-});
+
+  // Per-member credit limits (null = unlimited, use org defaults)
+  enrichmentLimit: integer("enrichment_limit"), // null = unlimited
+  icpLimit: integer("icp_limit"), // null = unlimited
+
+  // Per-member usage tracking (reset monthly with org)
+  enrichmentUsed: integer("enrichment_used").default(0).notNull(),
+  icpUsed: integer("icp_used").default(0).notNull(),
+
+  // Admin controls
+  isBlocked: boolean("is_blocked").default(false).notNull(), // Quick way to block spending
+
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("org_members_org_id_idx").on(table.orgId),
+  index("org_members_user_id_idx").on(table.userId),
+  unique("org_members_org_user_unique").on(table.orgId, table.userId),
+]);
 
 // Searches table - saved search queries
 export const searches = pgTable("searches", {
@@ -286,13 +304,13 @@ export const globalCompanies = pgTable("global_companies", {
   // Enrichment tracking
   employeesLastFetchedAt: timestamp("employees_last_fetched_at", { withTimezone: true }),
   employeesCount: integer("employees_count").default(0),
-  enrichmentSource: varchar("enrichment_source", { length: 50 }), // 'apollo', 'pdl'
+  enrichmentSource: varchar("enrichment_source", { length: 50 }), // 'apollo', 'linkedin'
 
-  // Company data (from PDL/Apollo)
+  // Company data (from LinkedIn/Apollo)
   industry: varchar("industry", { length: 255 }),
   size: varchar("size", { length: 100 }),
   location: varchar("location", { length: 255 }),
-  linkedinUrl: text("linkedin_url"),
+  linkedinUrl: text("linkedin_url"), // TODO: Add unique constraint after cleaning duplicates
   websiteUrl: text("website_url"),
   logoUrl: text("logo_url"),
   description: text("description"),
@@ -360,6 +378,48 @@ export const creditUsage = pgTable("credit_usage", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+// Credit history - unified audit trail for all credit consumption
+export const creditHistory = pgTable("credit_history", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  orgId: varchar("org_id", { length: 255 }).notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  userId: varchar("user_id", { length: 255 }).notNull().references(() => users.id),
+
+  // Credit type: 'enrichment' or 'icp'
+  creditType: varchar("credit_type", { length: 50 }).notNull(),
+
+  // Transaction type (describes what action consumed the credits)
+  transactionType: varchar("transaction_type", { length: 100 }).notNull(),
+  // enrichment: 'company_enrich', 'bulk_enrich', 'employee_fetch'
+  // icp: 'scraper_run', 'job_import'
+
+  // Credits consumed (always positive)
+  creditsUsed: integer("credits_used").notNull(),
+
+  // Running balance after this transaction
+  balanceAfter: integer("balance_after"),
+
+  // Human-readable description
+  description: text("description"),
+
+  // Reference IDs for linking to related records
+  searchId: uuid("search_id").references(() => searches.id, { onDelete: "set null" }),
+  companyId: uuid("company_id").references(() => companies.id, { onDelete: "set null" }),
+
+  // Additional metadata
+  metadata: jsonb("metadata").$type<{
+    scraperConfig?: { jobTitle: string; location: string };
+    companiesReturned?: number;
+    employeesEnriched?: number;
+    cacheHit?: boolean;
+    filters?: Record<string, unknown>;
+  }>(),
+
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("credit_history_org_id_idx").on(table.orgId),
+  index("credit_history_created_at_idx").on(table.createdAt),
+]);
+
 // Scraper runs - tracks execution history of job scrapers
 export const scraperRuns = pgTable("scraper_runs", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -393,6 +453,41 @@ export const scraperRuns = pgTable("scraper_runs", {
   completedAt: timestamp("completed_at", { withTimezone: true }),
 });
 
+// AI Suggestions cache - stores generated AI insights per organization
+export const aiSuggestions = pgTable("ai_suggestions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  orgId: varchar("org_id", { length: 255 }).notNull().references(() => organizations.id, { onDelete: "cascade" }),
+
+  // Suggestion type (allows different caches for different contexts)
+  type: varchar("type", { length: 50 }).notNull(), // 'dashboard', 'icp', 'company'
+
+  // Cached suggestions data
+  suggestions: jsonb("suggestions").$type<Array<{
+    type: 'action' | 'insight' | 'tip' | 'warning';
+    priority: 'high' | 'normal';
+    title: string;
+    description: string;
+    action?: { label: string; href: string };
+    aiGenerated: boolean;
+  }>>().notNull(),
+
+  // Data hash for staleness detection (hash of input data)
+  dataHash: varchar("data_hash", { length: 64 }),
+
+  // Rate limiting
+  refreshCount: integer("refresh_count").default(0).notNull(),
+  refreshCountResetAt: timestamp("refresh_count_reset_at", { withTimezone: true }),
+
+  // Timestamps
+  generatedAt: timestamp("generated_at", { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("ai_suggestions_org_id_type_idx").on(table.orgId, table.type),
+]);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   organizationMembers: many(organizationMembers),
@@ -411,12 +506,39 @@ export const organizationsRelations = relations(organizations, ({ one, many }) =
   employees: many(employees),
   leads: many(leads),
   creditUsage: one(creditUsage),
+  aiSuggestions: many(aiSuggestions),
+}));
+
+export const aiSuggestionsRelations = relations(aiSuggestions, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [aiSuggestions.orgId],
+    references: [organizations.id],
+  }),
 }));
 
 export const creditUsageRelations = relations(creditUsage, ({ one }) => ({
   organization: one(organizations, {
     fields: [creditUsage.orgId],
     references: [organizations.id],
+  }),
+}));
+
+export const creditHistoryRelations = relations(creditHistory, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [creditHistory.orgId],
+    references: [organizations.id],
+  }),
+  user: one(users, {
+    fields: [creditHistory.userId],
+    references: [users.id],
+  }),
+  search: one(searches, {
+    fields: [creditHistory.searchId],
+    references: [searches.id],
+  }),
+  company: one(companies, {
+    fields: [creditHistory.companyId],
+    references: [companies.id],
   }),
 }));
 
@@ -541,3 +663,7 @@ export type EnrichmentTransaction = typeof enrichmentTransactions.$inferSelect;
 export type NewEnrichmentTransaction = typeof enrichmentTransactions.$inferInsert;
 export type ScraperRun = typeof scraperRuns.$inferSelect;
 export type NewScraperRun = typeof scraperRuns.$inferInsert;
+export type AISuggestion = typeof aiSuggestions.$inferSelect;
+export type NewAISuggestion = typeof aiSuggestions.$inferInsert;
+export type CreditHistory = typeof creditHistory.$inferSelect;
+export type NewCreditHistory = typeof creditHistory.$inferInsert;

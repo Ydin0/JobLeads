@@ -26,13 +26,23 @@ import {
     Layers,
     GraduationCap,
     ListFilter,
-    Coins,
     AlertCircle,
     Info,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { toast } from 'sonner'
+import { LocationCombobox, SingleLocationCombobox } from '@/components/ui/location-combobox'
+import { useCredits } from '@/hooks/use-credits'
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog'
+import { jobBoardOptions } from '@/components/icons/job-boards'
 
 // Department options with colors for both light and dark mode
 const departments = [
@@ -72,16 +82,6 @@ interface JobScraper {
     experienceLevel: string
 }
 
-// Job board options
-const jobBoardOptions = [
-    { id: 'linkedin', label: 'LinkedIn', icon: '💼' },
-    { id: 'indeed', label: 'Indeed', icon: '🔍' },
-    { id: 'glassdoor', label: 'Glassdoor', icon: '🚪' },
-    { id: 'wellfound', label: 'Wellfound', icon: '🚀' },
-    { id: 'builtin', label: 'BuiltIn', icon: '🏗️' },
-    { id: 'dice', label: 'Dice', icon: '🎲' },
-]
-
 // Experience level options
 const experienceLevelOptions = [
     { id: 'any', label: 'Any Level' },
@@ -92,32 +92,17 @@ const experienceLevelOptions = [
     { id: 'executive', label: 'Executive' },
 ]
 
-// Common locations for scrapers
-const locationOptions = [
-    'United States',
-    'San Francisco, CA',
-    'New York, NY',
-    'Austin, TX',
-    'Seattle, WA',
-    'Los Angeles, CA',
-    'Boston, MA',
-    'Denver, CO',
-    'Chicago, IL',
-    'Remote',
-    'United Kingdom',
-    'London, UK',
-    'Germany',
-    'Canada',
-    'Toronto, Canada',
-]
-
-
 export default function NewICPPage() {
     const router = useRouter()
+    const { icpRemaining, isLoading: isLoadingCredits } = useCredits()
     const [step, setStep] = useState<'input' | 'generating' | 'review' | 'scrapers'>('input')
     const [productDescription, setProductDescription] = useState('')
     const [suggestion, setSuggestion] = useState<ICPSuggestion | null>(null)
     const [loadingText, setLoadingText] = useState('Analyzing your product...')
+    const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+
+    // Target locations (selected in step 1)
+    const [targetLocations, setTargetLocations] = useState<string[]>(['United States', 'Remote'])
 
     // Editable fields
     const [icpName, setIcpName] = useState('')
@@ -186,25 +171,25 @@ export default function NewICPPage() {
             setSelectedTech(aiSuggestion.techStack || [])
             setMinJobs(aiSuggestion.minJobs)
 
-            // Generate scrapers from AI suggestions or job titles
+            // Generate scrapers from AI suggestions or job titles using target locations
             let generatedScrapers: JobScraper[] = []
+            const locationsToUse = targetLocations.length > 0 ? targetLocations : ['United States', 'Remote']
 
             if (aiSuggestion.suggestedScrapers && aiSuggestion.suggestedScrapers.length > 0) {
-                // Use AI-suggested scrapers
-                generatedScrapers = aiSuggestion.suggestedScrapers.flatMap(
-                    (scraper: { jobTitle: string; locations: string[] }, scraperIndex: number) =>
-                        scraper.locations.map((location: string, locIndex: number) => ({
-                            id: `scraper-${scraperIndex}-${locIndex}`,
-                            jobTitle: scraper.jobTitle,
-                            location,
-                            experienceLevel: 'any',
-                        }))
+                // Use AI-suggested job titles with user's target locations
+                const suggestedTitles = aiSuggestion.suggestedScrapers.map((s: { jobTitle: string }) => s.jobTitle)
+                generatedScrapers = suggestedTitles.flatMap((title: string, titleIndex: number) =>
+                    locationsToUse.map((location, locIndex) => ({
+                        id: `scraper-${titleIndex}-${locIndex}`,
+                        jobTitle: title,
+                        location,
+                        experienceLevel: 'any',
+                    }))
                 )
             } else {
-                // Fallback: Generate from job titles
-                const defaultLocations = ['United States', 'Remote', 'San Francisco, CA']
+                // Fallback: Generate from job titles with user's target locations
                 generatedScrapers = aiSuggestion.jobTitles.flatMap((title: string, titleIndex: number) =>
-                    defaultLocations.map((location, locIndex) => ({
+                    locationsToUse.map((location, locIndex) => ({
                         id: `scraper-${titleIndex}-${locIndex}`,
                         jobTitle: title,
                         location,
@@ -417,66 +402,70 @@ export default function NewICPPage() {
                 {/* Step 1: Input */}
                 {step === 'input' && (
                     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                        {/* Main Input Card */}
-                        <div className="rounded-2xl border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-white/[0.02]">
-                            <div className="space-y-4">
-                                {/* Header */}
-                                <div className="flex items-start gap-3">
+                        {/* Main Input Card with gradient border */}
+                        <div className="rounded-2xl bg-gradient-to-r from-rose-200 via-purple-200 to-violet-300 p-[1px] dark:from-rose-400/40 dark:via-purple-400/40 dark:to-violet-400/40">
+                            <div className="rounded-2xl bg-white p-5 dark:bg-[#0a0a0f]">
+                                <div className="space-y-4">
+                                    {/* Header */}
+                                    <div className="flex items-start gap-3">
+                                        <div className="relative">
+                                            <div className="rounded-xl bg-gradient-to-r from-rose-200 via-purple-200 to-violet-300 p-[1px] dark:from-rose-400/40 dark:via-purple-400/40 dark:to-violet-400/40">
+                                                <div className="flex size-10 items-center justify-center rounded-xl bg-white dark:bg-[#0a0a0f]">
+                                                    <Brain className="size-5 text-black/60 dark:text-white/60" />
+                                                </div>
+                                            </div>
+                                            <div className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-black text-[8px] font-bold text-white dark:bg-white dark:text-black">
+                                                AI
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h2 className="text-sm font-semibold text-black dark:text-white">What do you sell?</h2>
+                                            <p className="text-xs text-black/50 dark:text-white/50">
+                                                Describe your product and AI will identify hiring signals to track
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Textarea */}
                                     <div className="relative">
-                                        <div className="flex size-10 items-center justify-center rounded-xl bg-black/5 dark:bg-white/10">
-                                            <Brain className="size-5 text-black/60 dark:text-white/60" />
+                                        <textarea
+                                            value={productDescription}
+                                            onChange={(e) => setProductDescription(e.target.value)}
+                                            placeholder="e.g., We sell cloud cost optimization software that helps DevOps teams reduce AWS spend..."
+                                            className="h-28 w-full resize-none rounded-xl border border-black/10 bg-black/[0.02] p-3 text-sm text-black placeholder:text-black/30 focus:border-black/20 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-white/20"
+                                        />
+                                        <div className="absolute bottom-2.5 right-3">
+                                            <span className={cn(
+                                                'text-[10px]',
+                                                productDescription.length > 20 ? 'text-green-500' : 'text-black/30 dark:text-white/30'
+                                            )}>
+                                                {productDescription.length > 20 ? 'Ready' : 'Keep typing...'}
+                                            </span>
                                         </div>
-                                        <div className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-black text-[8px] font-bold text-white dark:bg-white dark:text-black">
-                                            AI
+                                    </div>
+
+                                    {/* Error Display */}
+                                    {generateError && (
+                                        <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+                                            {generateError}
                                         </div>
-                                    </div>
-                                    <div>
-                                        <h2 className="text-sm font-semibold text-black dark:text-white">What do you sell?</h2>
-                                        <p className="text-xs text-black/50 dark:text-white/50">
-                                            Describe your product and AI will identify hiring signals to track
-                                        </p>
-                                    </div>
+                                    )}
+
+                                    {/* Generate Button */}
+                                    <Button
+                                        onClick={generateICP}
+                                        disabled={productDescription.length < 20}
+                                        className="h-9 w-full rounded-full bg-black text-sm text-white hover:bg-black/80 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                                    >
+                                        <Sparkles className="mr-1.5 size-3.5" />
+                                        Generate ICP with AI
+                                    </Button>
+
+                                    {/* Powered by note */}
+                                    <p className="text-center text-[10px] text-black/30 dark:text-white/30">
+                                        Powered by GPT-4o mini
+                                    </p>
                                 </div>
-
-                                {/* Textarea */}
-                                <div className="relative">
-                                    <textarea
-                                        value={productDescription}
-                                        onChange={(e) => setProductDescription(e.target.value)}
-                                        placeholder="e.g., We sell cloud cost optimization software that helps DevOps teams reduce AWS spend..."
-                                        className="h-28 w-full resize-none rounded-xl border border-black/10 bg-black/[0.02] p-3 text-sm text-black placeholder:text-black/30 focus:border-black/20 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30 dark:focus:border-white/20"
-                                    />
-                                    <div className="absolute bottom-2.5 right-3">
-                                        <span className={cn(
-                                            'text-[10px]',
-                                            productDescription.length > 20 ? 'text-green-500' : 'text-black/30 dark:text-white/30'
-                                        )}>
-                                            {productDescription.length > 20 ? 'Ready' : 'Keep typing...'}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* Error Display */}
-                                {generateError && (
-                                    <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">
-                                        {generateError}
-                                    </div>
-                                )}
-
-                                {/* Generate Button */}
-                                <Button
-                                    onClick={generateICP}
-                                    disabled={productDescription.length < 20}
-                                    className="h-9 w-full rounded-full bg-black text-sm text-white hover:bg-black/80 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-white/90"
-                                >
-                                    <Sparkles className="mr-1.5 size-3.5" />
-                                    Generate ICP with AI
-                                </Button>
-
-                                {/* Powered by note */}
-                                <p className="text-center text-[10px] text-black/30 dark:text-white/30">
-                                    Powered by GPT-5 mini
-                                </p>
                             </div>
                         </div>
 
@@ -507,6 +496,25 @@ export default function NewICPPage() {
                                     </button>
                                 ))}
                             </div>
+                        </div>
+
+                        {/* Target Locations */}
+                        <div className="rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.02]">
+                            <div className="mb-3 flex items-center gap-1.5">
+                                <MapPin className="size-3 text-black/50 dark:text-white/50" />
+                                <h3 className="text-xs font-medium text-black dark:text-white">Target Markets</h3>
+                            </div>
+
+                            <LocationCombobox
+                                selectedLocations={targetLocations}
+                                onLocationsChange={setTargetLocations}
+                                placeholder="Search and select locations..."
+                            />
+
+                            {/* Helper text */}
+                            <p className="mt-3 text-[10px] text-black/40 dark:text-white/40">
+                                These locations will be used to generate job scrapers for your ICP
+                            </p>
                         </div>
                     </div>
                 )}
@@ -596,48 +604,44 @@ export default function NewICPPage() {
                                 </div>
                             </div>
 
-                            {/* Job Titles & Decision Makers Row */}
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                {/* Job Titles */}
-                                <div className="rounded-xl border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-white/[0.02]">
-                                    <div className="mb-2 flex items-center gap-1.5">
-                                        <Users className="size-3 text-black/40 dark:text-white/40" />
-                                        <label className="text-xs font-medium text-black dark:text-white">Job Titles to Track</label>
-                                    </div>
-                                    <div className="flex flex-wrap gap-1">
-                                        {jobTitles.map((title) => (
-                                            <span
-                                                key={title}
-                                                className="inline-flex items-center gap-1 rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:bg-blue-500/10 dark:text-blue-400"
-                                            >
-                                                {title}
-                                                <button
-                                                    onClick={() => removeJobTitle(title)}
-                                                    className="rounded p-0.5 opacity-60 transition-opacity hover:bg-blue-200 hover:opacity-100 dark:hover:bg-blue-500/20"
-                                                >
-                                                    <X className="size-2" />
-                                                </button>
-                                            </span>
-                                        ))}
-                                        <div className="flex items-center gap-0.5">
-                                            <input
-                                                type="text"
-                                                value={newJobTitle}
-                                                onChange={(e) => setNewJobTitle(e.target.value)}
-                                                onKeyDown={(e) => e.key === 'Enter' && addJobTitle()}
-                                                placeholder="Add..."
-                                                className="w-16 rounded-md border border-black/10 bg-white/80 px-1.5 py-0.5 text-[10px] text-black placeholder:text-black/30 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30"
-                                            />
+                            {/* Job Titles */}
+                            <div className="rounded-xl border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-white/[0.02]">
+                                <div className="mb-2 flex items-center gap-1.5">
+                                    <Users className="size-3 text-black/40 dark:text-white/40" />
+                                    <label className="text-xs font-medium text-black dark:text-white">Job Titles to Track</label>
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                    {jobTitles.map((title) => (
+                                        <span
+                                            key={title}
+                                            className="inline-flex items-center gap-1 rounded-md bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:bg-blue-500/10 dark:text-blue-400"
+                                        >
+                                            {title}
                                             <button
-                                                onClick={addJobTitle}
-                                                className="rounded-md bg-black/5 p-1 text-black/40 transition-all hover:bg-black/10 hover:text-black dark:bg-white/5 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white"
+                                                onClick={() => removeJobTitle(title)}
+                                                className="rounded p-0.5 opacity-60 transition-opacity hover:bg-blue-200 hover:opacity-100 dark:hover:bg-blue-500/20"
                                             >
-                                                <Plus className="size-3" />
+                                                <X className="size-2" />
                                             </button>
-                                        </div>
+                                        </span>
+                                    ))}
+                                    <div className="flex items-center gap-0.5">
+                                        <input
+                                            type="text"
+                                            value={newJobTitle}
+                                            onChange={(e) => setNewJobTitle(e.target.value)}
+                                            onKeyDown={(e) => e.key === 'Enter' && addJobTitle()}
+                                            placeholder="Add..."
+                                            className="w-16 rounded-md border border-black/10 bg-white/80 px-1.5 py-0.5 text-[10px] text-black placeholder:text-black/30 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/30"
+                                        />
+                                        <button
+                                            onClick={addJobTitle}
+                                            className="rounded-md bg-black/5 p-1 text-black/40 transition-all hover:bg-black/10 hover:text-black dark:bg-white/5 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white"
+                                        >
+                                            <Plus className="size-3" />
+                                        </button>
                                     </div>
                                 </div>
-
                             </div>
 
                             {/* Tech Stack */}
@@ -750,15 +754,15 @@ export default function NewICPPage() {
                                                 key={board.id}
                                                 onClick={() => toggleJobBoard(board.id)}
                                                 className={cn(
-                                                    'flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors',
+                                                    'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-medium transition-all',
                                                     isSelected
-                                                        ? 'bg-black/10 text-black ring-1 ring-black/10 dark:bg-white/20 dark:text-white dark:ring-white/20'
-                                                        : 'bg-black/5 text-black/50 hover:bg-black/10 dark:bg-white/5 dark:text-white/50 dark:hover:bg-white/10'
+                                                        ? 'bg-[#F8F7FF] text-black ring-1 ring-black/10 dark:bg-white/10 dark:text-white dark:ring-white/10'
+                                                        : 'bg-black/[0.02] text-black/50 hover:bg-black/5 dark:bg-white/[0.02] dark:text-white/50 dark:hover:bg-white/5'
                                                 )}
                                             >
-                                                <span>{board.icon}</span>
+                                                <board.Icon className={cn('size-3.5', isSelected ? board.color : 'text-black/30 dark:text-white/30')} />
                                                 {board.label}
-                                                {isSelected && <Check className="ml-0.5 size-2.5" />}
+                                                {isSelected && <Check className="ml-0.5 size-2.5 text-black dark:text-white" />}
                                             </button>
                                         )
                                     })}
@@ -869,15 +873,11 @@ export default function NewICPPage() {
                                     </div>
                                     <div>
                                         <label className="mb-1 block text-[9px] font-medium text-black/40 dark:text-white/40">Location</label>
-                                        <select
+                                        <SingleLocationCombobox
                                             value={newScraperLocation}
-                                            onChange={(e) => setNewScraperLocation(e.target.value)}
-                                            className="w-full rounded-md border border-black/10 bg-white px-2 py-1.5 text-[11px] text-black focus:border-black/20 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-white/20"
-                                        >
-                                            {locationOptions.map((loc) => (
-                                                <option key={loc} value={loc}>{loc}</option>
-                                            ))}
-                                        </select>
+                                            onChange={setNewScraperLocation}
+                                            placeholder="Select location..."
+                                        />
                                     </div>
                                     <div>
                                         <label className="mb-1 block text-[9px] font-medium text-black/40 dark:text-white/40">Experience Level</label>
@@ -905,97 +905,110 @@ export default function NewICPPage() {
                             </div>
                         </div>
 
-                        {/* Credit Calculation */}
+                        {/* Credit Estimation */}
                         {(() => {
-                            const creditsPerScraper = 2
-                            const creditsPerJobBoard = 1
-                            const baseCredits = scrapers.length * creditsPerScraper
-                            const boardCredits = selectedJobBoards.length * creditsPerJobBoard
-                            const resultCredits = Math.ceil((maxRows / 100) * scrapers.length * 5)
-                            const totalCredits = baseCredits + boardCredits + resultCredits
-                            const availableCredits = 500 // Mock value - would come from user's account
-                            const hasEnoughCredits = availableCredits >= totalCredits
+                            // Formula: 1 ICP credit per company returned
+                            // Estimated companies = scrapers × job boards × max results per scraper
+                            const estimatedCompanies = scrapers.length * selectedJobBoards.length * maxRows
+                            const estimatedCredits = estimatedCompanies
+                            const currentBalance = isLoadingCredits ? 0 : icpRemaining
+                            const balanceAfter = currentBalance - estimatedCredits
+                            const hasEnoughCredits = balanceAfter >= 0
 
                             return (
-                                <div className={cn(
-                                    'rounded-xl border p-4',
-                                    hasEnoughCredits
-                                        ? 'border-green-500/20 bg-green-500/5 dark:border-green-500/20 dark:bg-green-500/5'
-                                        : 'border-red-500/20 bg-red-500/5 dark:border-red-500/20 dark:bg-red-500/5'
-                                )}>
-                                    <div className="mb-3 flex items-center justify-between">
+                                <div className="rounded-xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.02]">
+                                    {/* Header with gradient badge */}
+                                    <div className="mb-4 flex items-center justify-between">
                                         <div className="flex items-center gap-2">
-                                            <div className={cn(
-                                                'flex size-7 items-center justify-center rounded-lg',
-                                                hasEnoughCredits ? 'bg-green-500/20' : 'bg-red-500/20'
-                                            )}>
-                                                <Coins className={cn(
-                                                    'size-3.5',
-                                                    hasEnoughCredits ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                                                )} />
+                                            <div className="rounded-lg bg-gradient-to-r from-rose-200 via-purple-200 to-violet-300 p-[1px] dark:from-rose-400/40 dark:via-purple-400/40 dark:to-violet-400/40">
+                                                <div className="flex size-7 items-center justify-center rounded-lg bg-white dark:bg-[#0a0a0f]">
+                                                    <Target className="size-3.5 text-violet-500" />
+                                                </div>
                                             </div>
                                             <div>
-                                                <h3 className="text-xs font-semibold text-black dark:text-white">Credit Estimate</h3>
-                                                <p className="text-[10px] text-black/40 dark:text-white/40">Cost per initial scraper run</p>
+                                                <h3 className="text-xs font-semibold text-black dark:text-white">Estimated Credit Usage</h3>
+                                                <p className="text-[10px] text-black/40 dark:text-white/40">1 credit per company returned</p>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <div className={cn(
-                                                'text-lg font-bold',
-                                                hasEnoughCredits ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-                                            )}>
-                                                {totalCredits}
+                                        {/* Estimated total badge */}
+                                        <div className="rounded-full bg-gradient-to-r from-rose-200 via-purple-200 to-violet-300 p-[1px] dark:from-rose-400/40 dark:via-purple-400/40 dark:to-violet-400/40">
+                                            <div className="flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 dark:bg-[#0a0a0f]">
+                                                <Target className="size-3 text-violet-500" />
+                                                <span className="text-sm font-bold text-black dark:text-white">
+                                                    {estimatedCredits.toLocaleString()}
+                                                </span>
                                             </div>
-                                            <div className="text-[10px] text-black/40 dark:text-white/40">credits</div>
                                         </div>
                                     </div>
 
-                                    {/* Breakdown */}
-                                    <div className="mb-3 space-y-1.5 rounded-lg border border-black/5 bg-white/50 p-2.5 dark:border-white/5 dark:bg-white/[0.02]">
-                                        <div className="flex items-center justify-between text-[10px]">
-                                            <span className="text-black/50 dark:text-white/50">Scrapers ({scrapers.length} × {creditsPerScraper} credits)</span>
-                                            <span className="font-medium text-black/70 dark:text-white/70">{baseCredits}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between text-[10px]">
-                                            <span className="text-black/50 dark:text-white/50">Job Boards ({selectedJobBoards.length} × {creditsPerJobBoard} credit)</span>
-                                            <span className="font-medium text-black/70 dark:text-white/70">{boardCredits}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between text-[10px]">
-                                            <span className="text-black/50 dark:text-white/50">Results processing (up to {maxRows} rows)</span>
-                                            <span className="font-medium text-black/70 dark:text-white/70">{resultCredits}</span>
-                                        </div>
-                                        <div className="my-1.5 h-px bg-black/10 dark:bg-white/10" />
+                                    {/* Calculation Breakdown */}
+                                    <div className="mb-4 space-y-2 rounded-lg border border-black/5 bg-black/[0.02] p-3 dark:border-white/5 dark:bg-white/[0.02]">
                                         <div className="flex items-center justify-between text-[11px]">
-                                            <span className="font-medium text-black/70 dark:text-white/70">Total per run</span>
-                                            <span className="font-bold text-black dark:text-white">{totalCredits} credits</span>
+                                            <span className="text-black/60 dark:text-white/60">Job Scrapers</span>
+                                            <span className="font-medium text-black dark:text-white">{scrapers.length}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-[11px]">
+                                            <span className="text-black/60 dark:text-white/60">Job Boards</span>
+                                            <span className="font-medium text-black dark:text-white">{selectedJobBoards.length}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-[11px]">
+                                            <span className="text-black/60 dark:text-white/60">Max Results per Scraper</span>
+                                            <span className="font-medium text-black dark:text-white">{maxRows}</span>
+                                        </div>
+                                        <div className="my-2 h-px bg-black/10 dark:bg-white/10" />
+                                        <div className="flex items-center justify-between text-[11px]">
+                                            <span className="text-black/60 dark:text-white/60">Calculation</span>
+                                            <span className="font-mono text-[10px] text-black/50 dark:text-white/50">
+                                                {scrapers.length} × {selectedJobBoards.length} × {maxRows} = {estimatedCompanies.toLocaleString()}
+                                            </span>
                                         </div>
                                     </div>
 
-                                    {/* Balance */}
-                                    <div className="flex items-center justify-between rounded-lg bg-black/5 px-3 py-2 dark:bg-white/5">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[10px] text-black/50 dark:text-white/50">Your balance:</span>
-                                            <span className="text-xs font-semibold text-black dark:text-white">{availableCredits} credits</span>
+                                    {/* Balance Before/After */}
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between rounded-lg bg-black/[0.02] px-3 py-2 dark:bg-white/[0.02]">
+                                            <span className="text-[11px] text-black/60 dark:text-white/60">Current Balance</span>
+                                            <div className="flex items-center gap-1.5">
+                                                <Target className="size-3 text-violet-500" />
+                                                <span className="text-xs font-semibold text-black dark:text-white">
+                                                    {isLoadingCredits ? '...' : currentBalance.toLocaleString()}
+                                                </span>
+                                            </div>
                                         </div>
-                                        {hasEnoughCredits ? (
-                                            <div className="flex items-center gap-1 text-[10px] font-medium text-green-600 dark:text-green-400">
-                                                <Check className="size-3" />
-                                                Sufficient
+                                        <div className={cn(
+                                            'flex items-center justify-between rounded-lg px-3 py-2',
+                                            hasEnoughCredits
+                                                ? 'bg-green-500/10 dark:bg-green-500/10'
+                                                : 'bg-red-500/10 dark:bg-red-500/10'
+                                        )}>
+                                            <span className="text-[11px] text-black/60 dark:text-white/60">Balance After</span>
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Target className={cn(
+                                                        'size-3',
+                                                        hasEnoughCredits ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                                                    )} />
+                                                    <span className={cn(
+                                                        'text-xs font-semibold',
+                                                        hasEnoughCredits ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                                                    )}>
+                                                        {balanceAfter.toLocaleString()}
+                                                    </span>
+                                                </div>
+                                                {hasEnoughCredits ? (
+                                                    <Check className="size-3.5 text-green-600 dark:text-green-400" />
+                                                ) : (
+                                                    <AlertCircle className="size-3.5 text-red-600 dark:text-red-400" />
+                                                )}
                                             </div>
-                                        ) : (
-                                            <div className="flex items-center gap-1 text-[10px] font-medium text-red-600 dark:text-red-400">
-                                                <AlertCircle className="size-3" />
-                                                Need {totalCredits - availableCredits} more
-                                            </div>
-                                        )}
+                                        </div>
                                     </div>
 
                                     {/* Info note */}
-                                    <div className="mt-2.5 flex items-start gap-1.5">
+                                    <div className="mt-3 flex items-start gap-1.5">
                                         <Info className="mt-0.5 size-3 shrink-0 text-black/30 dark:text-white/30" />
                                         <p className="text-[9px] leading-relaxed text-black/40 dark:text-white/40">
-                                            Credits are consumed each time scrapers run. Scheduled runs will use the same credit amount.
-                                            You can adjust frequency in ICP settings after creation.
+                                            This is an estimate. Actual credit usage depends on companies found. If 540 companies are returned, 540 ICP credits will be consumed.
                                         </p>
                                     </div>
                                 </div>
@@ -1041,7 +1054,13 @@ export default function NewICPPage() {
                                 Back
                             </Button>
                             <Button
-                                onClick={saveICP}
+                                onClick={() => {
+                                    if (runImmediately) {
+                                        setShowConfirmDialog(true)
+                                    } else {
+                                        saveICP()
+                                    }
+                                }}
                                 disabled={scrapers.length === 0 || selectedJobBoards.length === 0 || isSaving}
                                 className="h-9 rounded-full bg-black px-5 text-sm text-white hover:bg-black/80 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-white/90"
                             >
@@ -1061,6 +1080,102 @@ export default function NewICPPage() {
                     </div>
                 )}
             </div>
+
+            {/* Confirmation Dialog */}
+            <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-base">
+                            <div className="rounded-lg bg-gradient-to-r from-rose-200 via-purple-200 to-violet-300 p-[1px] dark:from-rose-400/40 dark:via-purple-400/40 dark:to-violet-400/40">
+                                <div className="flex size-8 items-center justify-center rounded-lg bg-white dark:bg-[#0a0a0f]">
+                                    <Rocket className="size-4 text-violet-500" />
+                                </div>
+                            </div>
+                            Confirm Launch
+                        </DialogTitle>
+                        <DialogDescription className="text-sm text-black/60 dark:text-white/60">
+                            You&apos;re about to launch your ICP and run the scrapers immediately.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        {/* Estimated Credits */}
+                        <div className="rounded-xl border border-black/10 bg-black/[0.02] p-4 dark:border-white/10 dark:bg-white/[0.02]">
+                            <div className="mb-3 text-center">
+                                <p className="text-[11px] text-black/50 dark:text-white/50">Estimated Credit Usage</p>
+                                <div className="mt-2 inline-flex rounded-full bg-gradient-to-r from-rose-200 via-purple-200 to-violet-300 p-[1px] dark:from-rose-400/40 dark:via-purple-400/40 dark:to-violet-400/40">
+                                    <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2 dark:bg-[#0a0a0f]">
+                                        <Target className="size-4 text-violet-500" />
+                                        <span className="text-xl font-bold text-black dark:text-white">
+                                            {(scrapers.length * selectedJobBoards.length * maxRows).toLocaleString()}
+                                        </span>
+                                        <span className="text-sm text-black/50 dark:text-white/50">ICP Credits</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between text-[11px]">
+                                    <span className="text-black/60 dark:text-white/60">Current Balance</span>
+                                    <div className="flex items-center gap-1">
+                                        <Target className="size-3 text-violet-500" />
+                                        <span className="font-semibold text-black dark:text-white">
+                                            {isLoadingCredits ? '...' : icpRemaining.toLocaleString()}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="flex items-center justify-between text-[11px]">
+                                    <span className="text-black/60 dark:text-white/60">Balance After (estimated)</span>
+                                    <div className="flex items-center gap-1">
+                                        <Target className={cn(
+                                            'size-3',
+                                            (icpRemaining - scrapers.length * selectedJobBoards.length * maxRows) >= 0
+                                                ? 'text-green-500'
+                                                : 'text-red-500'
+                                        )} />
+                                        <span className={cn(
+                                            'font-semibold',
+                                            (icpRemaining - scrapers.length * selectedJobBoards.length * maxRows) >= 0
+                                                ? 'text-green-600 dark:text-green-400'
+                                                : 'text-red-600 dark:text-red-400'
+                                        )}>
+                                            {(icpRemaining - scrapers.length * selectedJobBoards.length * maxRows).toLocaleString()}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Info */}
+                        <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2 dark:bg-amber-500/10">
+                            <Info className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                            <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
+                                Actual credit usage depends on companies found. Credits are consumed based on results returned, not estimates.
+                            </p>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button
+                            variant="ghost"
+                            onClick={() => setShowConfirmDialog(false)}
+                            className="h-9 text-sm"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={() => {
+                                setShowConfirmDialog(false)
+                                saveICP()
+                            }}
+                            className="h-9 rounded-full bg-black px-5 text-sm text-white hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                        >
+                            <Rocket className="mr-1.5 size-3.5" />
+                            Launch & Run
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

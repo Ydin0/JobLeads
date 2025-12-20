@@ -103,11 +103,11 @@ export function CompanyLeadCard({
                     className={cn(
                         'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border transition-colors',
                         isSelected
-                            ? 'border-[var(--theme-accent)] bg-[var(--theme-accent)] dark:border-purple-500 dark:bg-purple-500'
+                            ? 'border-black bg-black dark:border-white dark:bg-white'
                             : 'border-black/20 bg-transparent hover:border-black/40 dark:border-white/20 dark:hover:border-white/40'
                     )}
                 >
-                    {isSelected && <Check className="size-3 text-white" />}
+                    {isSelected && <Check className="size-3 text-white dark:text-black" />}
                 </button>
 
                 {/* Company Logo */}
@@ -187,7 +187,7 @@ export function CompanyLeadCard({
                             size="sm"
                             onClick={onEnrichEmployees}
                             disabled={isEnriching}
-                            className="h-7 px-2 text-xs text-[var(--theme-accent)] hover:bg-[var(--theme-accent)]/10 dark:text-purple-400 dark:hover:bg-purple-500/10"
+                            className="h-7 px-2 text-xs text-black/60 hover:bg-black/5 hover:text-black dark:text-white/60 dark:hover:bg-white/5 dark:hover:text-white"
                         >
                             {isEnriching ? (
                                 <Loader2 className="mr-1 size-3 animate-spin" />
@@ -229,7 +229,7 @@ export function CompanyLeadCard({
                                 className={cn(
                                     'rounded-full px-1.5 py-0.5 text-[9px]',
                                     expandedSection === section.id
-                                        ? 'bg-[var(--theme-accent)]/10 text-[var(--theme-accent)] dark:bg-purple-500/10 dark:text-purple-400'
+                                        ? 'bg-black text-white dark:bg-white dark:text-black'
                                         : 'bg-black/5 dark:bg-white/10'
                                 )}
                             >
@@ -237,7 +237,7 @@ export function CompanyLeadCard({
                             </span>
                         )}
                         {section.needsGeneration && !section.isLoading && (
-                            <span className="size-1.5 rounded-full bg-[var(--theme-accent)] dark:bg-purple-500" title="AI content not generated" />
+                            <span className="size-1.5 rounded-full bg-black/40 dark:bg-white/40" title="AI content not generated" />
                         )}
                         {expandedSection === section.id ? (
                             <ChevronDown className="size-3" />

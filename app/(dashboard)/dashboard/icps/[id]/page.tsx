@@ -48,6 +48,7 @@ import { RunScrapersDialog } from '@/components/dashboard/run-scrapers-dialog'
 import { AddScraperModal } from '@/components/dashboard/add-scraper-modal'
 import { EditICPModal } from '@/components/dashboard/edit-icp-modal'
 import { DeleteConfirmationDialog } from '@/components/dashboard/delete-confirmation-dialog'
+import { getJobBoardById } from '@/components/icons/job-boards'
 
 // API response types
 interface ScraperConfig {
@@ -116,6 +117,10 @@ interface CompanyData {
     enrichedAt: string | null
     metadata: Record<string, unknown> | null
     createdAt: string
+    // Counts from API
+    employeesCount?: number
+    leadsCount?: number
+    jobsCount?: number
 }
 
 const experienceLevelLabels: Record<string, string> = {
@@ -191,6 +196,7 @@ export default function ICPDetailPage() {
     const [isRunningScrapers, setIsRunningScrapers] = useState(false)
     const [showRunScrapersDialog, setShowRunScrapersDialog] = useState(false)
     const [cancellingRunId, setCancellingRunId] = useState<string | null>(null)
+    const [isRerunning, setIsRerunning] = useState<number | null>(null)
     const completedScraperIdsRef = useRef<Set<string>>(new Set())
 
     // Quick Enrich state
@@ -652,6 +658,41 @@ export default function ICPDetailPage() {
 
     const scrapers = icp?.filters?.scrapers || []
 
+    // Check if any scraper is currently running
+    const isAnyScraperRunning = scraperRuns.some(r => r.status === 'running' || r.status === 'queued') || isRunningScrapers
+
+    // Handle rerunning a single scraper
+    const handleRerunScraper = async (scraperIndex: number) => {
+        if (!icpId) return
+
+        setIsRerunning(scraperIndex)
+        try {
+            const response = await fetch(`/api/searches/${icpId}/run`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ scraperIndex }),
+            })
+
+            if (!response.ok) {
+                const data = await response.json()
+                throw new Error(data.error || 'Failed to run scraper')
+            }
+
+            toast.success('Scraper started', {
+                description: `Running ${scrapers[scraperIndex]?.jobTitle} scraper`,
+            })
+
+            // Trigger polling for updates
+            setIsRunningScrapers(true)
+        } catch (err) {
+            toast.error('Failed to run scraper', {
+                description: err instanceof Error ? err.message : 'Unknown error',
+            })
+        } finally {
+            setIsRerunning(null)
+        }
+    }
+
     // Loading state
     if (isLoading) {
         return (
@@ -882,10 +923,47 @@ export default function ICPDetailPage() {
                                                             <GraduationCap className="size-3" />
                                                             {experienceLevelLabels[scraper.experienceLevel] || 'Any'}
                                                         </span>
+                                                        {/* Job Board Logos */}
+                                                        {icp?.filters?.jobBoards && icp.filters.jobBoards.length > 0 && (
+                                                            <span className="flex items-center gap-1 border-l border-black/10 pl-3 dark:border-white/10">
+                                                                {icp.filters.jobBoards.slice(0, 3).map(boardId => {
+                                                                    const board = getJobBoardById(boardId)
+                                                                    if (!board) return null
+                                                                    const Icon = board.Icon
+                                                                    return (
+                                                                        <Icon
+                                                                            key={boardId}
+                                                                            className={cn('size-3.5', board.color)}
+                                                                        />
+                                                                    )
+                                                                })}
+                                                                {icp.filters.jobBoards.length > 3 && (
+                                                                    <span className="text-[10px]">+{icp.filters.jobBoards.length - 3}</span>
+                                                                )}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-6">
+                                            <div className="flex items-center gap-4">
+                                                {/* Rerun button */}
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        handleRerunScraper(idx)
+                                                    }}
+                                                    disabled={isRerunning === idx || isAnyScraperRunning}
+                                                    className="h-8 gap-1.5 rounded-full border-black/10 px-3 text-xs hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
+                                                >
+                                                    {isRerunning === idx ? (
+                                                        <Loader2 className="size-3 animate-spin" />
+                                                    ) : (
+                                                        <RefreshCw className="size-3" />
+                                                    )}
+                                                    Rerun
+                                                </Button>
                                                 <div className="flex items-center gap-4 text-xs">
                                                     <div className="text-center">
                                                         <div className="font-semibold text-black dark:text-white">{scraperRunHistory.length}</div>
@@ -1038,7 +1116,7 @@ export default function ICPDetailPage() {
                         </div>
                     ) : (
                         <div className="overflow-hidden rounded-xl border border-black/10 dark:border-white/10">
-                            <table className="w-full">
+                            <table className="w-full table-fixed">
                                 <thead>
                                     <tr className="border-b border-black/5 bg-black/[0.02] dark:border-white/5 dark:bg-white/[0.02]">
                                         <th className="w-10 px-3 py-3">
@@ -1056,11 +1134,13 @@ export default function ICPDetailPage() {
                                                 )}
                                             </button>
                                         </th>
-                                        <th className="px-3 py-3 text-left text-xs font-medium text-black/50 dark:text-white/50">Company</th>
-                                        <th className="px-3 py-3 text-left text-xs font-medium text-black/50 dark:text-white/50">Industry</th>
-                                        <th className="px-3 py-3 text-left text-xs font-medium text-black/50 dark:text-white/50">Location</th>
-                                        <th className="px-3 py-3 text-left text-xs font-medium text-black/50 dark:text-white/50">Status</th>
-                                        <th className="w-16 px-3 py-3"></th>
+                                        <th className="w-[220px] px-3 py-3 text-left text-xs font-medium text-black/50 dark:text-white/50">Company</th>
+                                        <th className="w-[130px] px-3 py-3 text-left text-xs font-medium text-black/50 dark:text-white/50">Industry</th>
+                                        <th className="w-[100px] px-3 py-3 text-left text-xs font-medium text-black/50 dark:text-white/50">Size</th>
+                                        <th className="w-[130px] px-3 py-3 text-left text-xs font-medium text-black/50 dark:text-white/50">Location</th>
+                                        <th className="w-[80px] px-3 py-3 text-center text-xs font-medium text-black/50 dark:text-white/50">Jobs</th>
+                                        <th className="w-[80px] px-3 py-3 text-center text-xs font-medium text-black/50 dark:text-white/50">Leads</th>
+                                        <th className="w-[72px] px-3 py-3 text-right text-xs font-medium text-black/50 dark:text-white/50">Links</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-black/5 dark:divide-white/5">
@@ -1083,43 +1163,81 @@ export default function ICPDetailPage() {
                                             </td>
                                             <td className="px-3 py-3">
                                                 <div className="flex items-center gap-3">
-                                                    {company.logoUrl ? (
-                                                        <img src={company.logoUrl} alt="" className="size-8 rounded-lg object-cover" />
-                                                    ) : (
-                                                        <div className="flex size-8 items-center justify-center rounded-lg bg-black/5 text-xs font-bold text-black/60 dark:bg-white/5 dark:text-white/60">
-                                                            {company.name.charAt(0)}
-                                                        </div>
-                                                    )}
-                                                    <div>
-                                                        <div className="text-sm font-medium text-black dark:text-white">{company.name}</div>
-                                                        <div className="text-xs text-black/40 dark:text-white/40">{company.domain || 'No domain'}</div>
+                                                    <div className="flex-shrink-0">
+                                                        {company.logoUrl ? (
+                                                            <img src={company.logoUrl} alt="" className="size-8 rounded-lg object-cover" />
+                                                        ) : (
+                                                            <div className="flex size-8 items-center justify-center rounded-lg bg-black/5 text-xs font-bold text-black/60 dark:bg-white/5 dark:text-white/60">
+                                                                {company.name.charAt(0)}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="truncate text-sm font-medium text-black dark:text-white">{company.name}</div>
+                                                        <div className="truncate text-xs text-black/40 dark:text-white/40">{company.domain || 'No domain'}</div>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="px-3 py-3 text-sm text-black/60 dark:text-white/60">{company.industry || '-'}</td>
-                                            <td className="px-3 py-3 text-sm text-black/60 dark:text-white/60">{company.location || '-'}</td>
                                             <td className="px-3 py-3">
-                                                {company.isEnriched ? (
-                                                    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-600 dark:bg-green-500/20 dark:text-green-400">
-                                                        <CheckCircle2 className="size-3" />
-                                                        Enriched
+                                                <span className="block truncate text-sm text-black/60 dark:text-white/60">{company.industry || '-'}</span>
+                                            </td>
+                                            <td className="px-3 py-3">
+                                                {company.size ? (
+                                                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-600 dark:bg-blue-500/20 dark:text-blue-400">
+                                                        <Users className="size-3" />
+                                                        {company.size.replace(' employees', '')}
                                                     </span>
                                                 ) : (
-                                                    <span className="rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium text-black/50 dark:bg-white/10 dark:text-white/50">
-                                                        Pending
+                                                    <span className="text-sm text-black/30 dark:text-white/30">-</span>
+                                                )}
+                                            </td>
+                                            <td className="px-3 py-3">
+                                                <span className="block truncate text-sm text-black/60 dark:text-white/60">{company.location || '-'}</span>
+                                            </td>
+                                            <td className="px-3 py-3 text-center">
+                                                {(company.jobsCount || 0) > 0 ? (
+                                                    <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-medium text-green-600 dark:bg-green-500/20 dark:text-green-400">
+                                                        <Briefcase className="size-3" />
+                                                        {company.jobsCount}
                                                     </span>
+                                                ) : (
+                                                    <span className="text-sm text-black/30 dark:text-white/30">-</span>
+                                                )}
+                                            </td>
+                                            <td className="px-3 py-3 text-center">
+                                                {(company.leadsCount || 0) > 0 ? (
+                                                    <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-medium text-purple-600 dark:bg-purple-500/20 dark:text-purple-400">
+                                                        <Users className="size-3" />
+                                                        {company.leadsCount}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-sm text-black/30 dark:text-white/30">-</span>
                                                 )}
                                             </td>
                                             <td className="px-3 py-3">
                                                 <div className="flex items-center justify-end gap-1">
+                                                    {company.websiteUrl && (
+                                                        <a
+                                                            href={company.websiteUrl.startsWith('http') ? company.websiteUrl : `https://${company.websiteUrl}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="rounded p-1.5 text-black/30 hover:bg-black/5 hover:text-black dark:text-white/30 dark:hover:bg-white/5 dark:hover:text-white"
+                                                            title="Website"
+                                                        >
+                                                            <ExternalLink className="size-4" />
+                                                        </a>
+                                                    )}
                                                     {company.linkedinUrl && (
                                                         <a
                                                             href={company.linkedinUrl}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="rounded p-1.5 text-black/30 hover:bg-black/5 hover:text-black dark:text-white/30 dark:hover:bg-white/5 dark:hover:text-white"
+                                                            className="rounded p-1.5 text-black/30 hover:bg-black/5 hover:text-blue-600 dark:text-white/30 dark:hover:bg-white/5 dark:hover:text-blue-400"
+                                                            title="LinkedIn"
                                                         >
-                                                            <ExternalLink className="size-4" />
+                                                            <svg className="size-4" viewBox="0 0 24 24" fill="currentColor">
+                                                                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                                                            </svg>
                                                         </a>
                                                     )}
                                                 </div>

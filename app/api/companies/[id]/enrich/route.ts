@@ -4,11 +4,11 @@ import { companies, employees } from "@/lib/db/schema";
 import { requireOrgAuth } from "@/lib/auth";
 import { eq, and } from "drizzle-orm";
 import { searchPeopleAtCompany, EnrichedPerson } from "@/lib/apollo";
-import { enrichCompanyWithPDL } from "@/lib/pdl";
+import { enrichCompaniesInBatch, EnrichedCompanyData } from "@/lib/company-enrichment";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-// POST /api/companies/[id]/enrich - Enrich a company using PDL and find contacts using Apollo
+// POST /api/companies/[id]/enrich - Enrich a company using LinkedIn scraper and find contacts using Apollo
 export async function POST(req: Request, { params }: RouteContext) {
   try {
     const { orgId } = await requireOrgAuth();
@@ -29,57 +29,39 @@ export async function POST(req: Request, { params }: RouteContext) {
 
     console.log("[Enrich Company] Enriching company:", company.name);
 
-    let enrichedCompanyData = null;
+    let enrichedCompanyData: EnrichedCompanyData | null = null;
     const contactsFound: EnrichedPerson[] = [];
 
-    // Enrich company using People Data Labs
-    // Try LinkedIn URL first, then website, then name
-    try {
-      enrichedCompanyData = await enrichCompanyWithPDL({
-        linkedinUrl: company.linkedinUrl || undefined,
-        website: company.websiteUrl || company.domain || undefined,
-        name: company.name,
-      });
-      console.log("[Enrich Company] PDL enrichment result:", enrichedCompanyData);
-    } catch (error) {
-      console.error("[Enrich Company] Error enriching with PDL:", error);
-    }
+    // Enrich company using LinkedIn scraper (requires LinkedIn URL)
+    if (company.linkedinUrl) {
+      try {
+        const [result] = await enrichCompaniesInBatch([
+          {
+            companyId: id,
+            name: company.name,
+            linkedinUrl: company.linkedinUrl,
+          },
+        ]);
 
-    // Update company with enriched data
-    const updateData: Record<string, unknown> = {
-      isEnriched: true,
-      enrichedAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    if (enrichedCompanyData) {
-      if (enrichedCompanyData.domain) updateData.domain = enrichedCompanyData.domain;
-      if (enrichedCompanyData.website) updateData.websiteUrl = enrichedCompanyData.website;
-      if (enrichedCompanyData.linkedinUrl) updateData.linkedinUrl = enrichedCompanyData.linkedinUrl;
-      if (enrichedCompanyData.industry) updateData.industry = enrichedCompanyData.industry;
-      if (enrichedCompanyData.location) updateData.location = enrichedCompanyData.location;
-      if (enrichedCompanyData.description) updateData.description = enrichedCompanyData.description;
-      if (enrichedCompanyData.size) {
-        updateData.size = enrichedCompanyData.size;
-      } else if (enrichedCompanyData.employeeCount) {
-        updateData.size = `${enrichedCompanyData.employeeCount} employees`;
+        if (result.success && result.enrichedData) {
+          enrichedCompanyData = result.enrichedData;
+          console.log("[Enrich Company] LinkedIn enrichment result:", enrichedCompanyData);
+        } else {
+          console.log("[Enrich Company] LinkedIn enrichment failed:", result.error);
+        }
+      } catch (error) {
+        console.error("[Enrich Company] Error enriching with LinkedIn scraper:", error);
       }
-      updateData.metadata = {
-        ...(company.metadata as Record<string, unknown> || {}),
-        enrichmentSource: "pdl",
-        foundedYear: enrichedCompanyData.foundedYear,
-        companyType: enrichedCompanyData.type,
-        tags: enrichedCompanyData.tags,
-        facebookUrl: enrichedCompanyData.facebookUrl,
-        twitterUrl: enrichedCompanyData.twitterUrl,
-      };
+    } else {
+      console.log("[Enrich Company] No LinkedIn URL available, skipping enrichment");
     }
 
+    // Get the updated company (enrichment service already updated it if successful)
     const [updatedCompany] = await db
-      .update(companies)
-      .set(updateData)
+      .select()
+      .from(companies)
       .where(eq(companies.id, id))
-      .returning();
+      .limit(1);
 
     // Find contacts at this company if requested (using Apollo)
     if (findContacts) {

@@ -28,13 +28,15 @@ export function GenerateAIPrompt({
                 className
             )}
         >
-            {/* Icon */}
-            <div className="flex size-12 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--theme-accent)]/20 to-red-500/20 dark:from-purple-500/20 dark:to-blue-500/20">
-                {isInsights ? (
-                    <Brain className="size-6 text-[var(--theme-accent)] dark:text-purple-400" />
-                ) : (
-                    <MessageSquare className="size-6 text-[var(--theme-accent)] dark:text-purple-400" />
-                )}
+            {/* Icon with gradient border */}
+            <div className="rounded-xl bg-gradient-to-r from-rose-200 via-purple-200 to-violet-300 p-[1px] dark:from-rose-400/40 dark:via-purple-400/40 dark:to-violet-400/40">
+                <div className="flex size-12 items-center justify-center rounded-xl bg-white dark:bg-[#0a0a0f]">
+                    {isInsights ? (
+                        <Brain className="size-6 text-black/60 dark:text-white/60" />
+                    ) : (
+                        <MessageSquare className="size-6 text-black/60 dark:text-white/60" />
+                    )}
+                </div>
             </div>
 
             {/* Title */}
@@ -56,28 +58,30 @@ export function GenerateAIPrompt({
                 </div>
             )}
 
-            {/* Generate Button */}
-            <Button
-                onClick={onGenerate}
-                disabled={isLoading}
-                className="mt-4 h-9 bg-gradient-to-r from-[var(--theme-accent)] to-red-500 px-4 text-sm text-white shadow-lg shadow-[var(--theme-accent)]/25 hover:from-[var(--theme-accent)]/90 hover:to-red-500/90 dark:from-purple-500 dark:to-blue-500 dark:shadow-purple-500/25 dark:hover:from-purple-600 dark:hover:to-blue-600"
-            >
-                {isLoading ? (
-                    <>
-                        <Loader2 className="mr-2 size-4 animate-spin" />
-                        Generating...
-                    </>
-                ) : (
-                    <>
-                        <Sparkles className="mr-2 size-4" />
-                        Generate with AI
-                    </>
-                )}
-            </Button>
+            {/* Generate Button with gradient border */}
+            <div className="mt-4 rounded-full bg-gradient-to-r from-rose-200 via-purple-200 to-violet-300 p-[1px] dark:from-rose-400/40 dark:via-purple-400/40 dark:to-violet-400/40">
+                <Button
+                    onClick={onGenerate}
+                    disabled={isLoading}
+                    className="h-9 rounded-full bg-black px-5 text-sm font-medium text-white hover:bg-black/80 dark:bg-white dark:text-black dark:hover:bg-white/90"
+                >
+                    {isLoading ? (
+                        <>
+                            <Loader2 className="mr-2 size-4 animate-spin" />
+                            Generating...
+                        </>
+                    ) : (
+                        <>
+                            <Sparkles className="mr-2 size-4" />
+                            Generate with AI
+                        </>
+                    )}
+                </Button>
+            </div>
 
             {/* Powered by note */}
             <p className="mt-3 text-[10px] text-black/30 dark:text-white/30">
-                Powered by GPT-5 mini
+                Powered by GPT-4o mini
             </p>
         </div>
     )

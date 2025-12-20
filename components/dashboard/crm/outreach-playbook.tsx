@@ -149,14 +149,16 @@ export function OutreachPlaybookComponent({ playbook, className, onRegenerate, i
         <div className={cn('space-y-4', className)}>
             {/* Header */}
             <div className="flex items-center gap-2">
-                <div className="flex size-6 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--theme-accent)] to-red-500 dark:from-purple-500 dark:to-blue-500">
-                    <Sparkles className="size-3 text-white" />
+                <div className="rounded-lg bg-gradient-to-r from-rose-200 via-purple-200 to-violet-300 p-[1px] dark:from-rose-400/40 dark:via-purple-400/40 dark:to-violet-400/40">
+                    <div className="flex size-6 items-center justify-center rounded-lg bg-white dark:bg-[#0a0a0f]">
+                        <Sparkles className="size-3 text-black/60 dark:text-white/60" />
+                    </div>
                 </div>
                 <span className="text-xs font-medium text-black dark:text-white">
                     Outreach Playbook
                 </span>
-                <span className="rounded-full bg-[var(--theme-accent)]/10 px-1.5 py-0.5 text-[9px] font-medium text-[var(--theme-accent)] dark:bg-purple-500/10 dark:text-purple-400">
-                    GPT-5 mini
+                <span className="rounded-full bg-black/5 px-1.5 py-0.5 text-[9px] font-medium text-black/50 dark:bg-white/10 dark:text-white/50">
+                    GPT-4o mini
                 </span>
                 {onRegenerate && (
                     <Button
@@ -175,7 +177,7 @@ export function OutreachPlaybookComponent({ playbook, className, onRegenerate, i
             {/* Cold Call Script */}
             <div>
                 <div className="mb-2 flex items-center gap-2">
-                    <Phone className="size-3.5 text-green-500" />
+                    <Phone className="size-3.5 text-black/40 dark:text-white/40" />
                     <span className="text-xs font-medium text-black dark:text-white">
                         Cold Call Script
                     </span>
@@ -186,7 +188,7 @@ export function OutreachPlaybookComponent({ playbook, className, onRegenerate, i
             {/* Email Templates */}
             <div>
                 <div className="mb-2 flex items-center gap-2">
-                    <Mail className="size-3.5 text-blue-500" />
+                    <Mail className="size-3.5 text-black/40 dark:text-white/40" />
                     <span className="text-xs font-medium text-black dark:text-white">
                         Email Templates
                     </span>
@@ -219,7 +221,7 @@ export function OutreachPlaybookComponent({ playbook, className, onRegenerate, i
             {/* Objection Handlers */}
             <div>
                 <div className="mb-2 flex items-center gap-2">
-                    <MessageSquare className="size-3.5 text-orange-500" />
+                    <MessageSquare className="size-3.5 text-black/40 dark:text-white/40" />
                     <span className="text-xs font-medium text-black dark:text-white">
                         Objection Handlers
                     </span>

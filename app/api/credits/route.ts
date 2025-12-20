@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
-import { creditUsage } from "@/lib/db/schema";
+import { creditUsage, organizationMembers } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { requireAdminAuth } from "@/lib/auth";
 
 // Plan configurations
 const PLANS = {
@@ -84,6 +85,7 @@ export async function GET() {
       const cycleEnd = new Date(now);
       cycleEnd.setMonth(cycleEnd.getMonth() + 1);
 
+      // Reset org credits
       const [updatedCredits] = await db
         .update(creditUsage)
         .set({
@@ -97,6 +99,16 @@ export async function GET() {
         .returning();
 
       credits = updatedCredits;
+
+      // Also reset all member usage for this org
+      await db
+        .update(organizationMembers)
+        .set({
+          enrichmentUsed: 0,
+          icpUsed: 0,
+          updatedAt: now,
+        })
+        .where(eq(organizationMembers.orgId, orgId));
     }
 
     const plan = PLANS[credits.planId as keyof typeof PLANS] || PLANS.free;
@@ -131,17 +143,21 @@ export async function GET() {
   }
 }
 
-// PATCH /api/credits - Update plan (admin/billing)
+// PATCH /api/credits - Update plan (admin only)
 export async function PATCH(request: Request) {
   try {
-    const { orgId } = await auth();
-
-    if (!orgId) {
+    // Require admin access for plan changes
+    let context;
+    try {
+      context = await requireAdminAuth();
+    } catch {
       return NextResponse.json(
-        { error: "Unauthorized - Organization required" },
-        { status: 401 }
+        { error: "Forbidden - Admin access required" },
+        { status: 403 }
       );
     }
+
+    const { orgId } = context;
 
     const body = await request.json();
     const { planId } = body;

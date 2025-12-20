@@ -2,9 +2,11 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { X, Plus, MapPin, Briefcase, GraduationCap } from 'lucide-react'
+import { X, Plus, MapPin, Briefcase, GraduationCap, Globe, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { SingleLocationCombobox } from '@/components/ui/location-combobox'
+import { jobBoardOptions } from '@/components/icons/job-boards'
 
 interface ScraperConfig {
     jobTitle: string
@@ -45,24 +47,6 @@ const experienceLevelOptions = [
     { id: 'executive', label: 'Executive' },
 ]
 
-const locationOptions = [
-    'United States',
-    'San Francisco, CA',
-    'New York, NY',
-    'Austin, TX',
-    'Seattle, WA',
-    'Los Angeles, CA',
-    'Boston, MA',
-    'Denver, CO',
-    'Chicago, IL',
-    'Remote',
-    'United Kingdom',
-    'London, UK',
-    'Germany',
-    'Canada',
-    'Toronto, Canada',
-]
-
 export function AddScraperModal({
     icpId,
     icpName,
@@ -75,13 +59,27 @@ export function AddScraperModal({
     const [jobTitle, setJobTitle] = useState('')
     const [location, setLocation] = useState('United States')
     const [experienceLevel, setExperienceLevel] = useState('any')
+    const [selectedJobBoards, setSelectedJobBoards] = useState<string[]>(
+        existingFilters.jobBoards || ['linkedin', 'indeed']
+    )
     const [isSaving, setIsSaving] = useState(false)
+
+    const toggleJobBoard = (id: string) => {
+        setSelectedJobBoards(prev =>
+            prev.includes(id) ? prev.filter(b => b !== id) : [...prev, id]
+        )
+    }
 
     if (!open) return null
 
     const handleSave = async () => {
         if (!jobTitle.trim()) {
             toast.error('Please enter a job title')
+            return
+        }
+
+        if (selectedJobBoards.length === 0) {
+            toast.error('Please select at least one job board')
             return
         }
 
@@ -102,6 +100,7 @@ export function AddScraperModal({
                     filters: {
                         ...existingFilters,
                         scrapers: updatedScrapers,
+                        jobBoards: selectedJobBoards,
                     },
                 }),
             })
@@ -183,17 +182,45 @@ export function AddScraperModal({
                             <MapPin className="size-3.5 text-black/40 dark:text-white/40" />
                             Location
                         </label>
-                        <select
+                        <SingleLocationCombobox
                             value={location}
-                            onChange={(e) => setLocation(e.target.value)}
-                            className="h-10 w-full rounded-lg border border-black/10 bg-white px-3 text-sm focus:border-black/20 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:focus:border-white/20"
-                        >
-                            {locationOptions.map((loc) => (
-                                <option key={loc} value={loc}>
-                                    {loc}
-                                </option>
-                            ))}
-                        </select>
+                            onChange={setLocation}
+                            placeholder="Select location"
+                        />
+                    </div>
+
+                    {/* Job Boards */}
+                    <div>
+                        <label className="mb-2 flex items-center gap-2 text-xs font-medium text-black dark:text-white">
+                            <Globe className="size-3.5 text-black/40 dark:text-white/40" />
+                            Job Boards
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                            {jobBoardOptions.map((board) => {
+                                const isSelected = selectedJobBoards.includes(board.id)
+                                return (
+                                    <button
+                                        key={board.id}
+                                        type="button"
+                                        onClick={() => toggleJobBoard(board.id)}
+                                        className={cn(
+                                            'flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-medium transition-all',
+                                            isSelected
+                                                ? 'bg-[#F8F7FF] ring-1 ring-black/10 dark:bg-white/10 dark:ring-white/10'
+                                                : 'bg-black/[0.02] text-black/50 hover:bg-black/5 dark:bg-white/[0.02] dark:text-white/50 dark:hover:bg-white/5'
+                                        )}
+                                    >
+                                        <board.Icon className={cn('size-3.5', isSelected ? board.color : 'text-black/30 dark:text-white/30')} />
+                                        <span className={isSelected ? 'text-black dark:text-white' : ''}>
+                                            {board.label}
+                                        </span>
+                                        {isSelected && (
+                                            <Check className="size-3 text-black/60 dark:text-white/60" />
+                                        )}
+                                    </button>
+                                )
+                            })}
+                        </div>
                     </div>
 
                     {/* Experience Level */}

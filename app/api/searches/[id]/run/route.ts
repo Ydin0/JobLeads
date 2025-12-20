@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { searches, companies, jobs, leads, scraperRuns, globalCompanies } from "@/lib/db/schema";
+import { searches, companies, jobs, leads, scraperRuns, creditUsage, creditHistory } from "@/lib/db/schema";
 import { requireOrgAuth } from "@/lib/auth";
 import { eq, and, sql } from "drizzle-orm";
 import {
@@ -10,98 +10,7 @@ import {
   LinkedInJobResult,
 } from "@/lib/apify";
 import { categorizeJob, extractTechStack } from "@/lib/job-analysis";
-import { enrichCompanyWithPDL } from "@/lib/pdl";
-
-// Auto-enrich a company from global cache or PDL
-async function autoEnrichCompany(
-  companyId: string,
-  companyName: string,
-  linkedinUrl: string | null
-): Promise<void> {
-  try {
-    // First, check if we have this company in global cache by LinkedIn URL
-    if (linkedinUrl) {
-      const cached = await db.query.globalCompanies.findFirst({
-        where: eq(globalCompanies.linkedinUrl, linkedinUrl),
-      });
-
-      if (cached) {
-        console.log(`[Auto-Enrich] Found cached data for ${companyName} by LinkedIn URL`);
-        // Update the org company with cached data
-        await db.update(companies).set({
-          domain: cached.domain,
-          industry: cached.industry,
-          size: cached.size,
-          location: cached.location,
-          websiteUrl: cached.websiteUrl,
-          description: cached.description,
-          isEnriched: true,
-          enrichedAt: new Date(),
-          updatedAt: new Date(),
-        }).where(eq(companies.id, companyId));
-        return;
-      }
-    }
-
-    // Not in cache, call PDL to enrich
-    console.log(`[Auto-Enrich] Calling PDL for ${companyName}`);
-    const enriched = await enrichCompanyWithPDL({
-      linkedinUrl: linkedinUrl || undefined,
-      name: companyName,
-    });
-
-    if (!enriched) {
-      console.log(`[Auto-Enrich] PDL returned no data for ${companyName}`);
-      return;
-    }
-
-    // Save to global cache if we have a domain
-    if (enriched.domain) {
-      try {
-        await db.insert(globalCompanies).values({
-          domain: enriched.domain,
-          name: enriched.name || companyName,
-          industry: enriched.industry,
-          size: enriched.size,
-          location: enriched.location,
-          linkedinUrl: enriched.linkedinUrl,
-          websiteUrl: enriched.website,
-          logoUrl: enriched.logoUrl,
-          description: enriched.description,
-          enrichmentSource: "pdl",
-          metadata: {
-            tags: enriched.tags,
-            type: enriched.type,
-            foundedYear: enriched.foundedYear,
-            employeeCount: enriched.employeeCount,
-          },
-        }).onConflictDoNothing();
-        console.log(`[Auto-Enrich] Saved ${companyName} to global cache`);
-      } catch (err) {
-        // Ignore duplicate key errors
-        console.log(`[Auto-Enrich] Could not save to global cache:`, err);
-      }
-    }
-
-    // Update the org company with enriched data
-    await db.update(companies).set({
-      domain: enriched.domain,
-      industry: enriched.industry,
-      size: enriched.size,
-      location: enriched.location,
-      websiteUrl: enriched.website,
-      description: enriched.description,
-      isEnriched: true,
-      enrichedAt: new Date(),
-      updatedAt: new Date(),
-    }).where(eq(companies.id, companyId));
-
-    console.log(`[Auto-Enrich] Updated ${companyName} with PDL data`);
-  } catch (err) {
-    console.error(`[Auto-Enrich] Error enriching ${companyName}:`, err);
-    // Don't throw - enrichment failure shouldn't fail the scrape
-  }
-}
+import { enrichCompaniesInBatch } from "@/lib/company-enrichment";
 
 // Helper to parse full name into first and last name
 function parseFullName(fullName: string): { firstName: string; lastName: string } {
@@ -195,27 +104,32 @@ async function processJobResults(
     }
   }
 
-  // Auto-enrich new companies in the background (don't await all - fire and forget)
-  // Process in batches of 5 to avoid rate limiting
+  // Batch enrich new companies using LinkedIn scraper
   if (companiesToEnrich.length > 0) {
-    console.log(`[Search Run] Auto-enriching ${companiesToEnrich.length} new companies...`);
+    // Filter to only companies with LinkedIn URLs
+    const withLinkedIn = companiesToEnrich.filter(c => c.linkedinUrl);
 
-    // Fire off enrichment but don't wait for all to complete
-    // This allows the response to return faster
-    (async () => {
-      const batchSize = 5;
-      for (let i = 0; i < companiesToEnrich.length; i += batchSize) {
-        const batch = companiesToEnrich.slice(i, i + batchSize);
-        await Promise.allSettled(
-          batch.map(c => autoEnrichCompany(c.id, c.name, c.linkedinUrl))
-        );
-        // Small delay between batches to avoid rate limiting
-        if (i + batchSize < companiesToEnrich.length) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      }
-      console.log(`[Search Run] Finished auto-enriching ${companiesToEnrich.length} companies`);
-    })();
+    if (withLinkedIn.length > 0) {
+      console.log(`[Search Run] Batch enriching ${withLinkedIn.length} companies with LinkedIn URLs...`);
+
+      // Fire off enrichment in background - don't block the response
+      enrichCompaniesInBatch(
+        withLinkedIn.map(c => ({
+          companyId: c.id,
+          name: c.name,
+          linkedinUrl: c.linkedinUrl!,
+        }))
+      )
+        .then(results => {
+          const successful = results.filter(r => r.success).length;
+          console.log(`[Search Run] Batch enriched ${successful}/${results.length} companies`);
+        })
+        .catch(err => {
+          console.error("[Search Run] Batch enrichment failed:", err);
+        });
+    } else {
+      console.log(`[Search Run] No companies with LinkedIn URLs to enrich`);
+    }
   }
 
   // Store jobs in database
@@ -461,7 +375,7 @@ async function runSingleScraper(
 export async function POST(req: Request, { params }: RouteContext) {
   try {
     console.log("[Search Run] Starting search execution...");
-    const { orgId } = await requireOrgAuth();
+    const { orgId, userId } = await requireOrgAuth();
     const { id } = await params;
     console.log("[Search Run] Org ID:", orgId, "Search ID:", id);
 
@@ -483,6 +397,19 @@ export async function POST(req: Request, { params }: RouteContext) {
     const filters = search.filters as SearchFilters | null;
     const scrapers = filters?.scrapers || [];
     const maxRows = filters?.maxRows || 100;
+
+    // Check credit availability before running
+    const credits = await db.query.creditUsage.findFirst({
+      where: eq(creditUsage.orgId, orgId),
+    });
+
+    if (credits && credits.icpUsed >= credits.icpLimit) {
+      console.log("[Search Run] Insufficient ICP credits");
+      return NextResponse.json(
+        { error: "Insufficient ICP credits. Please upgrade your plan to continue." },
+        { status: 402 }
+      );
+    }
 
     // If no scrapers configured, fall back to legacy behavior
     if (scrapers.length === 0) {
@@ -612,6 +539,39 @@ export async function POST(req: Request, { params }: RouteContext) {
         updatedAt: new Date(),
       })
       .where(eq(searches.id, id));
+
+    // Deduct ICP credits for new companies found (1 credit per company)
+    if (totalNewCompanies > 0) {
+      console.log(`[Search Run] Deducting ${totalNewCompanies} ICP credits for new companies`);
+
+      // Update credit usage
+      const [updatedCredits] = await db
+        .update(creditUsage)
+        .set({
+          icpUsed: sql`${creditUsage.icpUsed} + ${totalNewCompanies}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(creditUsage.orgId, orgId))
+        .returning();
+
+      // Record credit history
+      await db.insert(creditHistory).values({
+        orgId,
+        userId,
+        creditType: "icp",
+        transactionType: "scraper_run",
+        creditsUsed: totalNewCompanies,
+        balanceAfter: updatedCredits ? updatedCredits.icpLimit - updatedCredits.icpUsed : null,
+        description: `Scraper run for "${search.name}" - found ${totalNewCompanies} new companies`,
+        searchId: id,
+        metadata: {
+          companiesReturned: totalNewCompanies,
+          scraperConfig: scrapersToRun.length === 1
+            ? { jobTitle: scrapersToRun[0].scraper.jobTitle, location: scrapersToRun[0].scraper.location }
+            : undefined,
+        },
+      });
+    }
 
     console.log(`[Search Run] Completed: ${totalJobsFound} jobs, ${totalNewCompanies} new companies, ${totalLeadsCreated} leads`);
 
