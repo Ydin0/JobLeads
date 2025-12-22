@@ -169,6 +169,7 @@ async function processJobResults(
   }
 
   // Batch enrich new companies using LinkedIn scraper
+  // IMPORTANT: Must await enrichment - serverless functions terminate after response is sent
   if (companiesToEnrich.length > 0) {
     // Filter to only companies with LinkedIn URLs
     const withLinkedIn = companiesToEnrich.filter(c => c.linkedinUrl);
@@ -176,21 +177,21 @@ async function processJobResults(
     if (withLinkedIn.length > 0) {
       console.log(`[Search Run] Batch enriching ${withLinkedIn.length} companies with LinkedIn URLs...`);
 
-      // Fire off enrichment in background - don't block the response
-      enrichCompaniesInBatch(
-        withLinkedIn.map(c => ({
-          companyId: c.id,
-          name: c.name,
-          linkedinUrl: c.linkedinUrl!,
-        }))
-      )
-        .then(results => {
-          const successful = results.filter(r => r.success).length;
-          console.log(`[Search Run] Batch enriched ${successful}/${results.length} companies`);
-        })
-        .catch(err => {
-          console.error("[Search Run] Batch enrichment failed:", err);
-        });
+      try {
+        // Await enrichment to ensure it completes before function terminates
+        const enrichmentResults = await enrichCompaniesInBatch(
+          withLinkedIn.map(c => ({
+            companyId: c.id,
+            name: c.name,
+            linkedinUrl: c.linkedinUrl!,
+          }))
+        );
+        const successful = enrichmentResults.filter(r => r.success).length;
+        console.log(`[Search Run] Batch enriched ${successful}/${enrichmentResults.length} companies`);
+      } catch (err) {
+        console.error("[Search Run] Batch enrichment failed:", err);
+        // Don't fail the whole scraper run if enrichment fails
+      }
     } else {
       console.log(`[Search Run] No companies with LinkedIn URLs to enrich`);
     }

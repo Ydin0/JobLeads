@@ -176,6 +176,8 @@ export function extractCompaniesFromJobs(jobs: LinkedInJobResult[]) {
     }
   >();
 
+  let companiesWithoutUrl = 0;
+
   for (const job of jobs) {
     // Skip jobs without company data
     if (!job.companyName) {
@@ -189,7 +191,14 @@ export function extractCompaniesFromJobs(jobs: LinkedInJobResult[]) {
     if (existing) {
       existing.jobCount++;
       existing.jobs.push(job);
+      // Update URL if we have one now but didn't before
+      if (!existing.linkedinUrl && job.companyUrl) {
+        existing.linkedinUrl = job.companyUrl;
+      }
     } else {
+      if (!job.companyUrl) {
+        companiesWithoutUrl++;
+      }
       companiesMap.set(companyKey, {
         name: job.companyName,
         linkedinUrl: job.companyUrl || "",
@@ -200,6 +209,9 @@ export function extractCompaniesFromJobs(jobs: LinkedInJobResult[]) {
     }
   }
 
-  console.log("[Apify] Extracted", companiesMap.size, "unique companies from", jobs.length, "jobs");
+  const companiesWithUrl = Array.from(companiesMap.values()).filter(c => c.linkedinUrl).length;
+  console.log(`[Apify] Extracted ${companiesMap.size} unique companies from ${jobs.length} jobs`);
+  console.log(`[Apify] Companies with LinkedIn URL: ${companiesWithUrl}, without URL: ${companiesWithoutUrl}`);
+
   return Array.from(companiesMap.values());
 }
