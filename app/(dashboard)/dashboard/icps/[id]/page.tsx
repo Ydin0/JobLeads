@@ -177,6 +177,11 @@ export default function ICPDetailPage() {
     const [sizeFilter, setSizeFilter] = useState<string>('all')
     const [industryFilter, setIndustryFilter] = useState<string>('all')
     const [locationFilter, setLocationFilter] = useState<string>('all')
+    const [filterOptions, setFilterOptions] = useState<{
+        sizes: string[]
+        industries: string[]
+        locations: string[]
+    }>({ sizes: [], industries: [], locations: [] })
     const [expandedScrapers, setExpandedScrapers] = useState<string[]>([])
     const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -303,6 +308,10 @@ export default function ICPDetailPage() {
                 setCompanies(companiesData.companies || [])
                 setTotalCount(companiesData.pagination?.totalCount || 0)
                 setTotalPages(companiesData.pagination?.totalPages || 1)
+                // Only update filter options if they have data (avoid resetting on empty pages)
+                if (companiesData.filterOptions) {
+                    setFilterOptions(companiesData.filterOptions)
+                }
             }
         } catch (err) {
             console.error('Error fetching companies:', err)
@@ -674,25 +683,6 @@ export default function ICPDetailPage() {
             setIsEnriching(false)
         }
     }
-
-    // Extract unique filter options from companies
-    const filterOptions = useMemo(() => {
-        const sizes = new Set<string>()
-        const industries = new Set<string>()
-        const locations = new Set<string>()
-
-        companies.forEach((c) => {
-            if (c.size) sizes.add(c.size)
-            if (c.industry) industries.add(c.industry)
-            if (c.location) locations.add(c.location)
-        })
-
-        return {
-            sizes: Array.from(sizes).sort(),
-            industries: Array.from(industries).sort(),
-            locations: Array.from(locations).sort(),
-        }
-    }, [companies])
 
     const filteredCompanies = useMemo(() => {
         return companies.filter((c) => {
@@ -1269,9 +1259,10 @@ export default function ICPDetailPage() {
             {/* Companies Tab */}
             {activeTab === 'companies' && (
                 <div className="space-y-4">
-                    {/* Search and Actions Row */}
-                    <div className="flex items-center justify-between gap-4">
-                        <div className="relative max-w-md flex-1">
+                    {/* Search, Filters and Actions Row */}
+                    <div className="flex items-center gap-3">
+                        {/* Search */}
+                        <div className="relative w-64">
                             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-black/40 dark:text-white/40" />
                             <input
                                 type="text"
@@ -1281,6 +1272,66 @@ export default function ICPDetailPage() {
                                 className="h-9 w-full rounded-lg border border-black/10 bg-white pl-9 pr-4 text-sm placeholder:text-black/40 focus:border-black/20 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:placeholder:text-white/40 dark:focus:border-white/20"
                             />
                         </div>
+
+                        {/* Divider */}
+                        <div className="h-6 w-px bg-black/10 dark:bg-white/10" />
+
+                        {/* Size Filter */}
+                        <select
+                            value={sizeFilter}
+                            onChange={(e) => setSizeFilter(e.target.value)}
+                            className="h-9 rounded-lg border border-black/10 bg-white px-3 text-sm text-black focus:border-black/20 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-white/20"
+                        >
+                            <option value="all">All Sizes</option>
+                            {filterOptions.sizes.map((size) => (
+                                <option key={size} value={size}>{size}</option>
+                            ))}
+                        </select>
+
+                        {/* Industry Filter */}
+                        <select
+                            value={industryFilter}
+                            onChange={(e) => setIndustryFilter(e.target.value)}
+                            className="h-9 max-w-[180px] truncate rounded-lg border border-black/10 bg-white px-3 text-sm text-black focus:border-black/20 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-white/20"
+                        >
+                            <option value="all">All Industries</option>
+                            {filterOptions.industries.map((industry) => (
+                                <option key={industry} value={industry}>{industry}</option>
+                            ))}
+                        </select>
+
+                        {/* Location Filter */}
+                        <select
+                            value={locationFilter}
+                            onChange={(e) => setLocationFilter(e.target.value)}
+                            className="h-9 max-w-[180px] truncate rounded-lg border border-black/10 bg-white px-3 text-sm text-black focus:border-black/20 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-white/20"
+                        >
+                            <option value="all">All Locations</option>
+                            {filterOptions.locations.map((location) => (
+                                <option key={location} value={location}>{location}</option>
+                            ))}
+                        </select>
+
+                        {/* Clear Filters Button */}
+                        {hasActiveFilters && (
+                            <button
+                                onClick={clearAllFilters}
+                                className="flex h-9 items-center gap-1.5 rounded-lg border border-black/10 bg-white px-3 text-sm text-black/60 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-white/60 dark:hover:bg-white/10"
+                            >
+                                <X className="size-3" />
+                                Clear
+                            </button>
+                        )}
+
+                        {/* Spacer */}
+                        <div className="flex-1" />
+
+                        {/* Results count */}
+                        <span className="text-sm text-black/40 dark:text-white/40">
+                            {filteredCompanies.length} of {totalCount} companies
+                        </span>
+
+                        {/* Selection actions */}
                         {selectedCompanies.length > 0 && (
                             <div className="flex items-center gap-2">
                                 <span className="text-sm text-black/50 dark:text-white/50">{selectedCompanies.length} selected</span>
@@ -1293,66 +1344,6 @@ export default function ICPDetailPage() {
                                 </Button>
                             </div>
                         )}
-                    </div>
-
-                    {/* Filters Row */}
-                    <div className="flex flex-wrap items-center gap-3">
-                        <div className="flex items-center gap-2 text-sm text-black/50 dark:text-white/50">
-                            <Filter className="size-4" />
-                            <span>Filters:</span>
-                        </div>
-
-                        {/* Size Filter */}
-                        <select
-                            value={sizeFilter}
-                            onChange={(e) => setSizeFilter(e.target.value)}
-                            className="h-8 rounded-lg border border-black/10 bg-white px-3 text-sm text-black focus:border-black/20 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-white/20"
-                        >
-                            <option value="all">All Sizes</option>
-                            {filterOptions.sizes.map((size) => (
-                                <option key={size} value={size}>{size}</option>
-                            ))}
-                        </select>
-
-                        {/* Industry Filter */}
-                        <select
-                            value={industryFilter}
-                            onChange={(e) => setIndustryFilter(e.target.value)}
-                            className="h-8 max-w-[200px] truncate rounded-lg border border-black/10 bg-white px-3 text-sm text-black focus:border-black/20 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-white/20"
-                        >
-                            <option value="all">All Industries</option>
-                            {filterOptions.industries.map((industry) => (
-                                <option key={industry} value={industry}>{industry}</option>
-                            ))}
-                        </select>
-
-                        {/* Location Filter */}
-                        <select
-                            value={locationFilter}
-                            onChange={(e) => setLocationFilter(e.target.value)}
-                            className="h-8 max-w-[200px] truncate rounded-lg border border-black/10 bg-white px-3 text-sm text-black focus:border-black/20 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-white/20"
-                        >
-                            <option value="all">All Locations</option>
-                            {filterOptions.locations.map((location) => (
-                                <option key={location} value={location}>{location}</option>
-                            ))}
-                        </select>
-
-                        {/* Clear Filters Button */}
-                        {hasActiveFilters && (
-                            <button
-                                onClick={clearAllFilters}
-                                className="flex h-8 items-center gap-1.5 rounded-lg border border-black/10 bg-white px-3 text-sm text-black/60 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-white/60 dark:hover:bg-white/10"
-                            >
-                                <X className="size-3" />
-                                Clear
-                            </button>
-                        )}
-
-                        {/* Results count */}
-                        <span className="ml-auto text-sm text-black/40 dark:text-white/40">
-                            {filteredCompanies.length} of {companies.length} companies
-                        </span>
                     </div>
 
                     {filteredCompanies.length === 0 ? (
