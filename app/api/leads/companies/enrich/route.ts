@@ -161,17 +161,23 @@ export async function POST(req: Request) {
           continue
         }
 
-        // Step 2: Call bulkEnrichPeople to get actual emails
-        // Collect Apollo IDs from employees that need enrichment
+        // Step 2: Call bulkEnrichPeople to get full details (unobfuscated names, LinkedIn, emails)
+        // Enrich ALL contacts to get unobfuscated names (api_search returns obfuscated last names)
         const apolloIdsToEnrich = globalEmployeesResult
-          .filter(emp => emp.apolloId && !emp.email) // Only enrich those without emails
+          .filter(emp => emp.apolloId) // Enrich all with Apollo IDs
           .map(emp => emp.apolloId!)
 
-        // Create a map for quick lookup of enriched data
-        const enrichedDataMap = new Map<string, { email: string | null; phone: string | null }>()
+        // Create a map for quick lookup of enriched data (includes full names, LinkedIn, email, phone)
+        const enrichedDataMap = new Map<string, {
+          firstName: string | null
+          lastName: string | null
+          email: string | null
+          phone: string | null
+          linkedinUrl: string | null
+        }>()
 
         if (apolloIdsToEnrich.length > 0) {
-          console.log(`[Leads Enrich] Enriching ${apolloIdsToEnrich.length} contacts for ${company.name} to get emails`)
+          console.log(`[Leads Enrich] Enriching ${apolloIdsToEnrich.length} contacts for ${company.name} to get full details`)
 
           try {
             // Get the webhook URL for phone enrichment if requested
@@ -180,24 +186,27 @@ export async function POST(req: Request) {
               ? `${baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`}/api/webhooks/apollo/phones`
               : undefined
 
-            // Call Apollo bulk_match to get emails (and optionally phone numbers)
+            // Call Apollo bulk_match to get full details (unobfuscated names, LinkedIn, emails, phones)
             const enrichedPeople = await bulkEnrichPeople({
               apolloIds: apolloIdsToEnrich,
               revealPhoneNumber: revealPhoneNumbers,
               webhookUrl,
             })
 
-            // Build lookup map from enriched results
+            // Build lookup map from enriched results - includes full names and LinkedIn
             for (const person of enrichedPeople) {
               if (person.apolloId) {
                 enrichedDataMap.set(person.apolloId, {
+                  firstName: person.firstName || null,
+                  lastName: person.lastName || null,
                   email: person.email,
                   phone: person.phone,
+                  linkedinUrl: person.linkedinUrl || null,
                 })
               }
             }
 
-            console.log(`[Leads Enrich] Enriched ${enrichedPeople.length} contacts with emails`)
+            console.log(`[Leads Enrich] Enriched ${enrichedPeople.length} contacts with full details`)
           } catch (enrichError) {
             console.error(`[Leads Enrich] Error enriching contacts for ${company.name}:`, enrichError)
             // Continue with what we have - some contacts may not have emails
@@ -210,14 +219,18 @@ export async function POST(req: Request) {
 
         for (const globalEmployee of globalEmployeesResult) {
           try {
-            // Get enriched data if available
+            // Get enriched data if available (includes full unobfuscated names)
             const enrichedData = globalEmployee.apolloId
               ? enrichedDataMap.get(globalEmployee.apolloId)
               : null
 
-            // Use enriched email if available, otherwise use cached email
+            // Use enriched data if available, otherwise fall back to cached data
+            // This ensures we get unobfuscated names from bulk_match instead of obfuscated from api_search
+            const firstName = enrichedData?.firstName || globalEmployee.firstName
+            const lastName = enrichedData?.lastName || globalEmployee.lastName
             const email = enrichedData?.email || globalEmployee.email || null
             const phone = enrichedData?.phone || globalEmployee.phone || null
+            const linkedinUrl = enrichedData?.linkedinUrl || globalEmployee.linkedinUrl || null
 
             // Check if employee already exists for this company
             const existingEmployee = await db.query.employees.findFirst({
@@ -232,27 +245,28 @@ export async function POST(req: Request) {
 
             if (existingEmployee) {
               employeeId = existingEmployee.id
-              // Update existing employee with new enriched data
-              if (email || phone) {
-                await db.update(employees)
-                  .set({
-                    email: email || existingEmployee.email,
-                    phone: phone || existingEmployee.phone,
-                    updatedAt: new Date(),
-                  })
-                  .where(eq(employees.id, existingEmployee.id))
-              }
+              // Update existing employee with new enriched data (including full names and LinkedIn)
+              await db.update(employees)
+                .set({
+                  firstName: firstName || existingEmployee.firstName,
+                  lastName: lastName || existingEmployee.lastName,
+                  email: email || existingEmployee.email,
+                  phone: phone || existingEmployee.phone,
+                  linkedinUrl: linkedinUrl || existingEmployee.linkedinUrl,
+                  updatedAt: new Date(),
+                })
+                .where(eq(employees.id, existingEmployee.id))
             } else {
-              // Create employee record with enriched data
+              // Create employee record with enriched data (full names from bulk_match)
               const [newEmployee] = await db.insert(employees).values({
                 orgId,
                 companyId: company.id,
-                firstName: globalEmployee.firstName,
-                lastName: globalEmployee.lastName,
+                firstName,
+                lastName,
                 email,
                 phone,
                 jobTitle: globalEmployee.jobTitle,
-                linkedinUrl: globalEmployee.linkedinUrl,
+                linkedinUrl,
                 location: globalEmployee.location,
                 seniority: globalEmployee.seniority,
                 department: globalEmployee.department,
@@ -281,19 +295,19 @@ export async function POST(req: Request) {
             })
 
             if (!existingLead) {
-              // Create lead record with enriched data
+              // Create lead record with enriched data (full names from bulk_match)
               const phonePending = revealPhoneNumbers && !phone
               const [newLead] = await db.insert(leads).values({
                 orgId,
                 companyId: company.id,
                 employeeId,
                 searchId: searchId || null,
-                firstName: globalEmployee.firstName,
-                lastName: globalEmployee.lastName,
+                firstName,
+                lastName,
                 email,
                 phone,
                 jobTitle: globalEmployee.jobTitle,
-                linkedinUrl: globalEmployee.linkedinUrl,
+                linkedinUrl,
                 location: globalEmployee.location,
                 status: 'new',
                 metadata: {
@@ -316,6 +330,18 @@ export async function POST(req: Request) {
                   apolloId: globalEmployee.apolloId,
                 })
               }
+            } else {
+              // Update existing lead with enriched data (full names, LinkedIn)
+              await db.update(leads)
+                .set({
+                  firstName: firstName || existingLead.firstName,
+                  lastName: lastName || existingLead.lastName,
+                  email: email || existingLead.email,
+                  phone: phone || existingLead.phone,
+                  linkedinUrl: linkedinUrl || existingLead.linkedinUrl,
+                  updatedAt: new Date(),
+                })
+                .where(eq(leads.id, existingLead.id))
             }
           } catch (err) {
             // Ignore duplicate errors

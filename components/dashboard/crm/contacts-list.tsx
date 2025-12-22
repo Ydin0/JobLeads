@@ -11,13 +11,16 @@ import {
     ChevronDown,
     ChevronUp,
     Loader2,
+    PhoneCall,
 } from 'lucide-react'
 import type { LeadWithCompany } from '@/hooks/use-crm-leads'
+import { toast } from 'sonner'
 
 interface ContactsListProps {
     leads: LeadWithCompany[]
     maxVisible?: number
     onStatusChange?: (leadId: string, status: string) => void
+    onLeadUpdate?: (leadId: string, updates: Partial<LeadWithCompany>) => void
 }
 
 const statusColors: Record<string, { bg: string; text: string; ring: string }> = {
@@ -66,12 +69,49 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 function ContactRow({
     lead,
     onStatusChange,
+    onLeadUpdate,
 }: {
     lead: LeadWithCompany
     onStatusChange?: (leadId: string, status: string) => void
+    onLeadUpdate?: (leadId: string, updates: Partial<LeadWithCompany>) => void
 }) {
+    const [isFetchingPhone, setIsFetchingPhone] = useState(false)
     const status = lead.status || 'new'
     const colors = statusColors[status] || statusColors.new
+    const metadata = lead.metadata as Record<string, unknown> | null
+    const phonePending = metadata?.phonePending as boolean | undefined
+    const hasApolloId = !!metadata?.apolloId
+
+    const handleFetchPhone = async () => {
+        if (isFetchingPhone || lead.phone || phonePending) return
+
+        setIsFetchingPhone(true)
+        try {
+            const response = await fetch(`/api/leads/${lead.id}/fetch-phone`, {
+                method: 'POST',
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to fetch phone')
+            }
+
+            if (data.phone) {
+                toast.success('Phone number found!')
+                onLeadUpdate?.(lead.id, { phone: data.phone })
+            } else if (data.pending) {
+                toast.info('Phone lookup initiated. Will appear shortly.')
+                onLeadUpdate?.(lead.id, {
+                    metadata: { ...metadata, phonePending: true },
+                } as Partial<LeadWithCompany>)
+            }
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Failed to fetch phone')
+        } finally {
+            setIsFetchingPhone(false)
+        }
+    }
 
     return (
         <div className="group flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02]">
@@ -116,13 +156,22 @@ function ContactRow({
                         </span>
                         <CopyButton text={lead.phone} label="phone" />
                     </div>
-                ) : (lead.metadata as Record<string, unknown>)?.phonePending ? (
+                ) : phonePending || isFetchingPhone ? (
                     <div className="flex items-center gap-1.5">
                         <Loader2 className="size-3 animate-spin text-emerald-500" />
                         <span className="text-[10px] text-emerald-600 dark:text-emerald-400">
                             Fetching phone...
                         </span>
                     </div>
+                ) : hasApolloId ? (
+                    <button
+                        onClick={handleFetchPhone}
+                        className="flex items-center gap-1 rounded-md border border-black/10 px-2 py-1 text-[10px] font-medium text-black/50 transition-colors hover:border-black/20 hover:bg-black/5 hover:text-black/70 dark:border-white/10 dark:text-white/50 dark:hover:border-white/20 dark:hover:bg-white/5 dark:hover:text-white/70"
+                        title="Fetch phone number (uses 1 credit)"
+                    >
+                        <PhoneCall className="size-3" />
+                        <span>Get Phone</span>
+                    </button>
                 ) : null}
                 {lead.linkedinUrl && (
                     <a
@@ -154,7 +203,7 @@ function ContactRow({
     )
 }
 
-export function ContactsList({ leads, maxVisible = 3, onStatusChange }: ContactsListProps) {
+export function ContactsList({ leads, maxVisible = 3, onStatusChange, onLeadUpdate }: ContactsListProps) {
     const [isExpanded, setIsExpanded] = useState(false)
 
     const visibleLeads = isExpanded ? leads : leads.slice(0, maxVisible)
@@ -171,7 +220,7 @@ export function ContactsList({ leads, maxVisible = 3, onStatusChange }: Contacts
     return (
         <div className="space-y-1">
             {visibleLeads.map((lead) => (
-                <ContactRow key={lead.id} lead={lead} onStatusChange={onStatusChange} />
+                <ContactRow key={lead.id} lead={lead} onStatusChange={onStatusChange} onLeadUpdate={onLeadUpdate} />
             ))}
 
             {hasMore && (
