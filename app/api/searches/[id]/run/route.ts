@@ -23,10 +23,10 @@ function parseFullName(fullName: string): { firstName: string; lastName: string 
   return { firstName, lastName };
 }
 
-// Extend timeout for Apify actor runs - increased for parallel execution
-export const maxDuration = 600; // 10 minutes (increased from 5)
+// Extend timeout for Apify actor runs - max allowed on Vercel hobby plan
+export const maxDuration = 300; // 5 minutes (Vercel hobby plan limit)
 
-// Timeout for individual scraper (4 minutes each to allow multiple to complete)
+// Timeout for individual scraper (4 minutes each - since they run in parallel, this is fine)
 const SCRAPER_TIMEOUT_MS = 4 * 60 * 1000;
 
 // Stale run threshold - runs older than this in "running" state are considered stuck
