@@ -18,29 +18,46 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover'
 
-interface FilterComboboxProps {
+interface MultiSelectFilterProps {
     options: string[]
-    value: string
-    onChange: (value: string) => void
+    selectedValues: string[]
+    onChange: (values: string[]) => void
     placeholder: string
     searchPlaceholder?: string
     emptyText?: string
     className?: string
 }
 
-export function FilterCombobox({
+export function MultiSelectFilter({
     options,
-    value,
+    selectedValues,
     onChange,
     placeholder,
     searchPlaceholder = 'Search...',
     emptyText = 'No results found.',
     className,
-}: FilterComboboxProps) {
+}: MultiSelectFilterProps) {
     const [open, setOpen] = React.useState(false)
 
-    const isSelected = value !== 'all'
-    const displayValue = isSelected ? value : placeholder
+    const toggleValue = (value: string) => {
+        if (selectedValues.includes(value)) {
+            onChange(selectedValues.filter((v) => v !== value))
+        } else {
+            onChange([...selectedValues, value])
+        }
+    }
+
+    const removeValue = (value: string, e: React.MouseEvent) => {
+        e.stopPropagation()
+        onChange(selectedValues.filter((v) => v !== value))
+    }
+
+    const clearAll = (e: React.MouseEvent) => {
+        e.stopPropagation()
+        onChange([])
+    }
+
+    const hasSelection = selectedValues.length > 0
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -51,58 +68,84 @@ export function FilterCombobox({
                     aria-expanded={open}
                     className={cn(
                         'h-9 justify-between gap-2 border-black/10 bg-white text-sm font-normal hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10',
-                        isSelected && 'border-black/20 bg-black/5 dark:border-white/20 dark:bg-white/10',
+                        hasSelection && 'border-black/20 bg-black/5 dark:border-white/20 dark:bg-white/10',
                         className
                     )}
                 >
                     <span className={cn(
                         'truncate',
-                        !isSelected && 'text-black/50 dark:text-white/50'
+                        !hasSelection && 'text-black/50 dark:text-white/50'
                     )}>
-                        {displayValue}
+                        {hasSelection
+                            ? `${selectedValues.length} selected`
+                            : placeholder
+                        }
                     </span>
-                    {isSelected ? (
+                    {hasSelection ? (
                         <X
                             className="size-3.5 shrink-0 opacity-50 hover:opacity-100"
-                            onClick={(e) => {
-                                e.stopPropagation()
-                                onChange('all')
-                            }}
+                            onClick={clearAll}
                         />
                     ) : (
                         <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
                     )}
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[220px] p-0" align="start">
+            <PopoverContent className="w-[250px] p-0" align="start">
                 <Command>
                     <CommandInput placeholder={searchPlaceholder} className="h-9" />
-                    <CommandList>
+                    <CommandList className="max-h-[300px]">
                         <CommandEmpty>{emptyText}</CommandEmpty>
                         <CommandGroup>
-                            {options.map((option) => (
-                                <CommandItem
-                                    key={option}
-                                    value={option}
-                                    onSelect={() => {
-                                        onChange(option === value ? 'all' : option)
-                                        setOpen(false)
-                                    }}
-                                    className="cursor-pointer"
-                                >
-                                    <Check
-                                        className={cn(
-                                            'mr-2 size-4',
-                                            value === option ? 'opacity-100' : 'opacity-0'
-                                        )}
-                                    />
-                                    <span className="truncate">{option}</span>
-                                </CommandItem>
-                            ))}
+                            {options.map((option) => {
+                                const isSelected = selectedValues.includes(option)
+                                return (
+                                    <CommandItem
+                                        key={option}
+                                        value={option}
+                                        onSelect={() => toggleValue(option)}
+                                        className="cursor-pointer"
+                                    >
+                                        <div
+                                            className={cn(
+                                                'mr-2 flex size-4 items-center justify-center rounded border',
+                                                isSelected
+                                                    ? 'border-black bg-black dark:border-white dark:bg-white'
+                                                    : 'border-black/20 dark:border-white/20'
+                                            )}
+                                        >
+                                            {isSelected && (
+                                                <Check className="size-3 text-white dark:text-black" />
+                                            )}
+                                        </div>
+                                        <span className="truncate">{option}</span>
+                                    </CommandItem>
+                                )
+                            })}
                         </CommandGroup>
                     </CommandList>
                 </Command>
             </PopoverContent>
+
+            {/* Selected values chips below */}
+            {hasSelection && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                    {selectedValues.map((value) => (
+                        <span
+                            key={value}
+                            className="inline-flex items-center gap-1 rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium text-black dark:bg-white/10 dark:text-white"
+                        >
+                            {value}
+                            <button
+                                onClick={(e) => removeValue(value, e)}
+                                className="ml-0.5 rounded-full p-0.5 transition-colors hover:bg-black/10 dark:hover:bg-white/20"
+                            >
+                                <X className="size-2.5" />
+                            </button>
+                        </span>
+                    ))}
+                </div>
+            )}
         </Popover>
     )
 }

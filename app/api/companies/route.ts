@@ -49,12 +49,14 @@ export async function GET(req: Request) {
       .from(companies)
       .where(filteredWhereClause);
 
-    // Get unique filter options for ALL companies (without filters - so users see all options)
+    // Get unique filter options AND overall stats for ALL companies (without filters)
     const [filterOptionsResult] = await db
       .select({
         sizes: sql<string[]>`COALESCE(array_agg(DISTINCT ${companies.size}) FILTER (WHERE ${companies.size} IS NOT NULL), ARRAY[]::text[])`,
         industries: sql<string[]>`COALESCE(array_agg(DISTINCT ${companies.industry}) FILTER (WHERE ${companies.industry} IS NOT NULL), ARRAY[]::text[])`,
         locations: sql<string[]>`COALESCE(array_agg(DISTINCT ${companies.location}) FILTER (WHERE ${companies.location} IS NOT NULL), ARRAY[]::text[])`,
+        totalCompanies: sql<number>`COUNT(*)::int`,
+        enrichedCompanies: sql<number>`COUNT(*) FILTER (WHERE ${companies.isEnriched} = true)::int`,
       })
       .from(companies)
       .where(baseWhereClause);
@@ -63,6 +65,12 @@ export async function GET(req: Request) {
       sizes: (filterOptionsResult?.sizes || []).sort(),
       industries: (filterOptionsResult?.industries || []).sort(),
       locations: (filterOptionsResult?.locations || []).sort(),
+    };
+
+    // Overall stats (not affected by filters)
+    const overallStats = {
+      totalCompanies: filterOptionsResult?.totalCompanies || 0,
+      enrichedCompanies: filterOptionsResult?.enrichedCompanies || 0,
     };
 
     // Get companies with counts via subqueries (avoids N+1 queries)
@@ -174,6 +182,7 @@ export async function GET(req: Request) {
         totalPages: Math.ceil(totalCount / limit),
       },
       filterOptions,
+      overallStats,
     });
   } catch (error) {
     console.error("Error fetching companies:", error);

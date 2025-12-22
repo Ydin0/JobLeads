@@ -49,7 +49,7 @@ import { AddScraperModal } from '@/components/dashboard/add-scraper-modal'
 import { EditICPModal } from '@/components/dashboard/edit-icp-modal'
 import { DeleteConfirmationDialog } from '@/components/dashboard/delete-confirmation-dialog'
 import { getJobBoardById } from '@/components/icons/job-boards'
-import { FilterCombobox } from '@/components/ui/filter-combobox'
+import { MultiSelectFilter } from '@/components/ui/filter-combobox'
 
 // API response types
 interface ScraperConfig {
@@ -173,15 +173,19 @@ export default function ICPDetailPage() {
     const [page, setPage] = useState(1)
     const [activeTab, setActiveTab] = useState<'companies' | 'scrapers' | 'leads'>('scrapers')
 
-    // Company filter state
-    const [sizeFilter, setSizeFilter] = useState<string>('all')
-    const [industryFilter, setIndustryFilter] = useState<string>('all')
-    const [locationFilter, setLocationFilter] = useState<string>('all')
+    // Company filter state (arrays for multi-select)
+    const [sizeFilter, setSizeFilter] = useState<string[]>([])
+    const [industryFilter, setIndustryFilter] = useState<string[]>([])
+    const [locationFilter, setLocationFilter] = useState<string[]>([])
     const [filterOptions, setFilterOptions] = useState<{
         sizes: string[]
         industries: string[]
         locations: string[]
     }>({ sizes: [], industries: [], locations: [] })
+    const [overallStats, setOverallStats] = useState<{
+        totalCompanies: number
+        enrichedCompanies: number
+    }>({ totalCompanies: 0, enrichedCompanies: 0 })
     const [expandedScrapers, setExpandedScrapers] = useState<string[]>([])
     const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -306,10 +310,10 @@ export default function ICPDetailPage() {
                 limit: ITEMS_PER_PAGE.toString(),
             })
 
-            // Add filter params if active
-            if (sizeFilter !== 'all') params.append('size', sizeFilter)
-            if (industryFilter !== 'all') params.append('industry', industryFilter)
-            if (locationFilter !== 'all') params.append('location', locationFilter)
+            // Add filter params if active (comma-separated for multi-select)
+            if (sizeFilter.length > 0) params.append('size', sizeFilter.join(','))
+            if (industryFilter.length > 0) params.append('industry', industryFilter.join(','))
+            if (locationFilter.length > 0) params.append('location', locationFilter.join(','))
 
             const companiesResponse = await fetch(`/api/companies?${params}`)
             if (companiesResponse.ok) {
@@ -320,6 +324,10 @@ export default function ICPDetailPage() {
                 // Only update filter options if they have data (avoid resetting on empty pages)
                 if (companiesData.filterOptions) {
                     setFilterOptions(companiesData.filterOptions)
+                }
+                // Store overall stats (not affected by filters)
+                if (companiesData.overallStats) {
+                    setOverallStats(companiesData.overallStats)
                 }
             }
         } catch (err) {
@@ -708,9 +716,6 @@ export default function ICPDetailPage() {
         )
     }, [companies, searchQuery])
 
-    const enrichedCount = useMemo(() => {
-        return companies.filter((c) => c.isEnriched).length
-    }, [companies])
 
     const toggleSelectAll = useCallback(() => {
         if (selectedCompanies.length === filteredCompanies.length) {
@@ -973,7 +978,7 @@ export default function ICPDetailPage() {
                 </div>
                 <div className="h-10 w-px bg-black/10 dark:bg-white/10" />
                 <div>
-                    <div className="text-3xl font-semibold text-black dark:text-white">{enrichedCount}</div>
+                    <div className="text-3xl font-semibold text-black dark:text-white">{overallStats.enrichedCompanies}</div>
                     <div className="mt-1 text-sm text-black/50 dark:text-white/50">Enriched</div>
                 </div>
                 <div className="h-10 w-px bg-black/10 dark:bg-white/10" />
@@ -1265,9 +1270,9 @@ export default function ICPDetailPage() {
                         </div>
 
                         {/* Size Filter */}
-                        <FilterCombobox
+                        <MultiSelectFilter
                             options={filterOptions.sizes}
-                            value={sizeFilter}
+                            selectedValues={sizeFilter}
                             onChange={setSizeFilter}
                             placeholder="Size"
                             searchPlaceholder="Search sizes..."
@@ -1275,25 +1280,23 @@ export default function ICPDetailPage() {
                         />
 
                         {/* Industry Filter */}
-                        <FilterCombobox
+                        <MultiSelectFilter
                             options={filterOptions.industries}
-                            value={industryFilter}
+                            selectedValues={industryFilter}
                             onChange={setIndustryFilter}
                             placeholder="Industry"
                             searchPlaceholder="Search industries..."
                             emptyText="No industries found."
-                            className="max-w-[180px]"
                         />
 
                         {/* Location Filter */}
-                        <FilterCombobox
+                        <MultiSelectFilter
                             options={filterOptions.locations}
-                            value={locationFilter}
+                            selectedValues={locationFilter}
                             onChange={setLocationFilter}
                             placeholder="Location"
                             searchPlaceholder="Search locations..."
                             emptyText="No locations found."
-                            className="max-w-[180px]"
                         />
 
                         {/* Spacer */}
@@ -1301,7 +1304,7 @@ export default function ICPDetailPage() {
 
                         {/* Results count */}
                         <span className="text-sm text-black/40 dark:text-white/40">
-                            {filteredCompanies.length} of {totalCount} companies
+                            {totalCount} {sizeFilter.length > 0 || industryFilter.length > 0 || locationFilter.length > 0 ? 'matching' : ''} companies
                         </span>
 
                         {/* Selection actions */}
