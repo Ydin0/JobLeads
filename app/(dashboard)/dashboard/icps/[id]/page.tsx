@@ -35,6 +35,7 @@ import {
     Loader2,
     AlertCircle,
     Plus,
+    X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
@@ -171,6 +172,11 @@ export default function ICPDetailPage() {
     const [openMenu, setOpenMenu] = useState<string | null>(null)
     const [page, setPage] = useState(1)
     const [activeTab, setActiveTab] = useState<'companies' | 'scrapers' | 'leads'>('scrapers')
+
+    // Company filter state
+    const [sizeFilter, setSizeFilter] = useState<string>('all')
+    const [industryFilter, setIndustryFilter] = useState<string>('all')
+    const [locationFilter, setLocationFilter] = useState<string>('all')
     const [expandedScrapers, setExpandedScrapers] = useState<string[]>([])
     const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -669,19 +675,61 @@ export default function ICPDetailPage() {
         }
     }
 
+    // Extract unique filter options from companies
+    const filterOptions = useMemo(() => {
+        const sizes = new Set<string>()
+        const industries = new Set<string>()
+        const locations = new Set<string>()
+
+        companies.forEach((c) => {
+            if (c.size) sizes.add(c.size)
+            if (c.industry) industries.add(c.industry)
+            if (c.location) locations.add(c.location)
+        })
+
+        return {
+            sizes: Array.from(sizes).sort(),
+            industries: Array.from(industries).sort(),
+            locations: Array.from(locations).sort(),
+        }
+    }, [companies])
+
     const filteredCompanies = useMemo(() => {
-        if (!searchQuery) return companies
-        const query = searchQuery.toLowerCase()
-        return companies.filter(
-            (c) =>
-                c.name.toLowerCase().includes(query) ||
-                (c.domain?.toLowerCase() || '').includes(query)
-        )
-    }, [companies, searchQuery])
+        return companies.filter((c) => {
+            // Search filter
+            if (searchQuery) {
+                const query = searchQuery.toLowerCase()
+                const matchesSearch =
+                    c.name.toLowerCase().includes(query) ||
+                    (c.domain?.toLowerCase() || '').includes(query)
+                if (!matchesSearch) return false
+            }
+
+            // Size filter
+            if (sizeFilter !== 'all' && c.size !== sizeFilter) return false
+
+            // Industry filter
+            if (industryFilter !== 'all' && c.industry !== industryFilter) return false
+
+            // Location filter
+            if (locationFilter !== 'all' && c.location !== locationFilter) return false
+
+            return true
+        })
+    }, [companies, searchQuery, sizeFilter, industryFilter, locationFilter])
 
     const enrichedCount = useMemo(() => {
         return companies.filter((c) => c.isEnriched).length
     }, [companies])
+
+    // Check if any filters are active
+    const hasActiveFilters = sizeFilter !== 'all' || industryFilter !== 'all' || locationFilter !== 'all'
+
+    const clearAllFilters = () => {
+        setSizeFilter('all')
+        setIndustryFilter('all')
+        setLocationFilter('all')
+    }
 
     const toggleSelectAll = useCallback(() => {
         if (selectedCompanies.length === filteredCompanies.length) {
@@ -1221,6 +1269,7 @@ export default function ICPDetailPage() {
             {/* Companies Tab */}
             {activeTab === 'companies' && (
                 <div className="space-y-4">
+                    {/* Search and Actions Row */}
                     <div className="flex items-center justify-between gap-4">
                         <div className="relative max-w-md flex-1">
                             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-black/40 dark:text-white/40" />
@@ -1244,6 +1293,66 @@ export default function ICPDetailPage() {
                                 </Button>
                             </div>
                         )}
+                    </div>
+
+                    {/* Filters Row */}
+                    <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex items-center gap-2 text-sm text-black/50 dark:text-white/50">
+                            <Filter className="size-4" />
+                            <span>Filters:</span>
+                        </div>
+
+                        {/* Size Filter */}
+                        <select
+                            value={sizeFilter}
+                            onChange={(e) => setSizeFilter(e.target.value)}
+                            className="h-8 rounded-lg border border-black/10 bg-white px-3 text-sm text-black focus:border-black/20 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-white/20"
+                        >
+                            <option value="all">All Sizes</option>
+                            {filterOptions.sizes.map((size) => (
+                                <option key={size} value={size}>{size}</option>
+                            ))}
+                        </select>
+
+                        {/* Industry Filter */}
+                        <select
+                            value={industryFilter}
+                            onChange={(e) => setIndustryFilter(e.target.value)}
+                            className="h-8 max-w-[200px] truncate rounded-lg border border-black/10 bg-white px-3 text-sm text-black focus:border-black/20 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-white/20"
+                        >
+                            <option value="all">All Industries</option>
+                            {filterOptions.industries.map((industry) => (
+                                <option key={industry} value={industry}>{industry}</option>
+                            ))}
+                        </select>
+
+                        {/* Location Filter */}
+                        <select
+                            value={locationFilter}
+                            onChange={(e) => setLocationFilter(e.target.value)}
+                            className="h-8 max-w-[200px] truncate rounded-lg border border-black/10 bg-white px-3 text-sm text-black focus:border-black/20 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-white/20"
+                        >
+                            <option value="all">All Locations</option>
+                            {filterOptions.locations.map((location) => (
+                                <option key={location} value={location}>{location}</option>
+                            ))}
+                        </select>
+
+                        {/* Clear Filters Button */}
+                        {hasActiveFilters && (
+                            <button
+                                onClick={clearAllFilters}
+                                className="flex h-8 items-center gap-1.5 rounded-lg border border-black/10 bg-white px-3 text-sm text-black/60 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-white/60 dark:hover:bg-white/10"
+                            >
+                                <X className="size-3" />
+                                Clear
+                            </button>
+                        )}
+
+                        {/* Results count */}
+                        <span className="ml-auto text-sm text-black/40 dark:text-white/40">
+                            {filteredCompanies.length} of {companies.length} companies
+                        </span>
                     </div>
 
                     {filteredCompanies.length === 0 ? (

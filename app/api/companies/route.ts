@@ -47,9 +47,10 @@ export async function GET(req: Request) {
         createdAt: companies.createdAt,
         updatedAt: companies.updatedAt,
         // Efficient count subqueries instead of loading all records
-        employeesCount: sql<number>`(SELECT COUNT(*) FROM employees WHERE employees.company_id = ${companies.id})`.as("employees_count"),
-        leadsCount: sql<number>`(SELECT COUNT(*) FROM leads WHERE leads.company_id = ${companies.id})`.as("leads_count"),
-        jobsCount: sql<number>`(SELECT COUNT(*) FROM jobs WHERE jobs.company_id = ${companies.id})`.as("jobs_count"),
+        // Cast to integer to ensure proper number type is returned
+        employeesCount: sql<number>`COALESCE((SELECT COUNT(*)::int FROM employees WHERE employees.company_id = ${companies.id}), 0)`.as("employees_count"),
+        leadsCount: sql<number>`COALESCE((SELECT COUNT(*)::int FROM leads WHERE leads.company_id = ${companies.id}), 0)`.as("leads_count"),
+        jobsCount: sql<number>`COALESCE((SELECT COUNT(*)::int FROM jobs WHERE jobs.company_id = ${companies.id}), 0)`.as("jobs_count"),
       })
       .from(companies)
       .where(whereClause)
