@@ -242,26 +242,36 @@ async function upsertGlobalCompanyTimestamp(
   name: string,
   linkedinUrl?: string
 ): Promise<void> {
-  await db
-    .insert(globalCompanies)
-    .values({
-      domain: domain.toLowerCase(),
-      name,
-      employeesCount: 0,
-      employeesLastFetchedAt: new Date(),
-      linkedinUrl,
-      enrichmentSource: 'apollo',
-    })
-    .onConflictDoUpdate({
-      target: globalCompanies.domain,
-      set: {
+  // Check if company already exists
+  const existing = await db.query.globalCompanies.findFirst({
+    where: eq(globalCompanies.domain, domain.toLowerCase()),
+  })
+
+  if (existing) {
+    // Update only timestamp, preserve existing employeesCount
+    await db
+      .update(globalCompanies)
+      .set({
         name,
-        // Don't update employeesCount for filtered fetches
-        linkedinUrl: linkedinUrl || sql`COALESCE(${globalCompanies.linkedinUrl}, EXCLUDED.linkedin_url)`,
+        linkedinUrl: linkedinUrl || existing.linkedinUrl,
         enrichmentSource: 'apollo',
         updatedAt: new Date(),
-      },
-    })
+      })
+      .where(eq(globalCompanies.domain, domain.toLowerCase()))
+  } else {
+    // Insert new record - we don't know the count yet, so leave it null/0
+    // The count will be set properly when a non-filtered fetch happens
+    await db
+      .insert(globalCompanies)
+      .values({
+        domain: domain.toLowerCase(),
+        name,
+        employeesCount: 0,
+        employeesLastFetchedAt: new Date(),
+        linkedinUrl,
+        enrichmentSource: 'apollo',
+      })
+  }
 }
 
 /**
@@ -312,14 +322,12 @@ export async function getEmployeesFromCache(
 
 /**
  * Get or fetch employees for a company domain
- * This is the main entry point for the cache-first enrichment flow
+ * This is the main entry point for the enrichment flow
  *
- * When filters are provided:
- * - First checks if cache has matching employees
- * - If no matches found in cache, fetches from Apollo WITH the filters
- * - This ensures Apollo returns only relevant employees (e.g., c_suite at Nike, not random 1000)
+ * IMPORTANT: Currently always fetches from Apollo first to build up our database.
+ * Once we have sufficient data, we can switch to cache-first approach.
  *
- * @param fetchAll - If true and fetching is needed, fetches ALL employees (no limit)
+ * @param fetchAll - If true, fetches ALL employees (no limit)
  */
 export async function getOrFetchEmployees(
   domain: string,
@@ -335,63 +343,51 @@ export async function getOrFetchEmployees(
 }> {
   const hasFilters = filters && (filters.titles?.length || filters.seniorities?.length)
 
-  // Check cache first
-  const cacheResult = await checkEmployeeCache(domain)
+  // ALWAYS fetch from Apollo first to build our database
+  // TODO: Once we have sufficient data, switch to cache-first approach
+  console.log(`[EmployeeCache] Fetching from Apollo for ${domain} (fetchAll: ${fetchAll}, hasFilters: ${hasFilters})`)
 
-  // If we have filters, first try to find matching employees in cache
-  if (hasFilters && cacheResult.cacheHit && !cacheResult.isStale && !forceRefresh) {
-    const cachedFiltered = await getEmployeesFromCache(domain, filters)
-
-    if (cachedFiltered.length > 0) {
-      console.log(`[EmployeeCache] Found ${cachedFiltered.length} matching employees in cache for ${domain}`)
-      return {
-        employees: cachedFiltered,
-        cacheHit: true,
-        totalAvailable: cachedFiltered.length,
-      }
-    }
-
-    // No matching employees in cache - need to fetch from Apollo with filters
-    console.log(`[EmployeeCache] Cache exists but no matches for filters. Fetching from Apollo with filters...`)
-  }
-
-  // Determine if we need to fetch
-  const shouldFetch = forceRefresh || !cacheResult.cacheHit || cacheResult.isStale ||
-    (hasFilters && cacheResult.cacheHit) // Fetch if filters provided but no matches found above
-
-  let employees: GlobalEmployee[]
-  let totalAvailable: number
-  let cacheHit: boolean
-
-  if (shouldFetch) {
-    console.log(`[EmployeeCache] Fetching from Apollo (fetchAll: ${fetchAll}, hasFilters: ${hasFilters})`)
-
-    // Pass filters to Apollo so it returns only matching employees
-    employees = await fetchAndCacheEmployees(
+  try {
+    // Fetch from Apollo (with filters if provided)
+    const employees = await fetchAndCacheEmployees(
       domain,
       companyName,
       companyLinkedinUrl || undefined,
-      filters,  // Pass filters to Apollo!
+      filters,
       fetchAll
     )
-    totalAvailable = employees.length
-    cacheHit = false
-  } else {
-    employees = cacheResult.employees
-    totalAvailable = cacheResult.employeesCount
-    cacheHit = true
-  }
 
-  // If filters were passed to Apollo, employees are already filtered
-  // If no filters, apply them locally (for cache-hit scenarios without filters initially)
-  if (!shouldFetch && hasFilters) {
-    employees = await getEmployeesFromCache(domain, filters)
-  }
+    console.log(`[EmployeeCache] Apollo returned ${employees.length} employees for ${domain}`)
 
-  return {
-    employees,
-    cacheHit,
-    totalAvailable,
+    return {
+      employees,
+      cacheHit: false,
+      totalAvailable: employees.length,
+    }
+  } catch (error) {
+    console.error(`[EmployeeCache] Apollo fetch failed for ${domain}:`, error)
+
+    // Fallback to cache if Apollo fails
+    console.log(`[EmployeeCache] Falling back to cache for ${domain}`)
+    const cacheResult = await checkEmployeeCache(domain)
+
+    if (cacheResult.cacheHit) {
+      let employees = cacheResult.employees
+
+      // Apply filters to cached data if needed
+      if (hasFilters) {
+        employees = await getEmployeesFromCache(domain, filters)
+      }
+
+      return {
+        employees,
+        cacheHit: true,
+        totalAvailable: cacheResult.employeesCount,
+      }
+    }
+
+    // No cache available, re-throw the error
+    throw error
   }
 }
 
