@@ -198,6 +198,10 @@ export default function ICPDetailPage() {
     const [cancellingRunId, setCancellingRunId] = useState<string | null>(null)
     const [isRerunning, setIsRerunning] = useState<number | null>(null)
     const completedScraperIdsRef = useRef<Set<string>>(new Set())
+    const pollingStartTimeRef = useRef<number | null>(null)
+
+    // Max polling duration: 15 minutes - after this, we assume something is stuck
+    const MAX_POLLING_DURATION_MS = 15 * 60 * 1000
 
     // Quick Enrich state
     const [showEnrichModal, setShowEnrichModal] = useState(false)
@@ -207,6 +211,12 @@ export default function ICPDetailPage() {
     const [isCalculating, setIsCalculating] = useState(false)
     const [isEnriching, setIsEnriching] = useState(false)
     const [enrichTargetCompanyIds, setEnrichTargetCompanyIds] = useState<string[] | null>(null)
+
+    // Phone enrichment polling state
+    const [isPollingPhones, setIsPollingPhones] = useState(false)
+    const [pendingPhoneCount, setPendingPhoneCount] = useState(0)
+    const phonePollingStartRef = useRef<number | null>(null)
+    const MAX_PHONE_POLLING_DURATION_MS = 5 * 60 * 1000 // 5 minutes max for phone polling
 
     // Leads tab state
     const [leadsSearch, setLeadsSearch] = useState('')
@@ -238,6 +248,13 @@ export default function ICPDetailPage() {
         try {
             setIsLoading(true)
             setError(null)
+
+            // First, cleanup any stale runs from previous sessions
+            try {
+                await fetch(`/api/searches/${icpId}/runs/cleanup`, { method: 'POST' })
+            } catch {
+                // Ignore cleanup errors on load
+            }
 
             const [icpResponse, runsResponse] = await Promise.all([
                 fetch(`/api/searches/${icpId}`),
@@ -304,9 +321,10 @@ export default function ICPDetailPage() {
         if (!icpId) return
 
         completedScraperIdsRef.current = new Set()
+        pollingStartTimeRef.current = Date.now() // Reset polling timer
         setIsRunningScrapers(true)
         setShowRunScrapersDialog(false)
-        toast.info('Starting scrapers...')
+        toast.info('Starting scrapers in parallel...')
 
         try {
             const response = await fetch(`/api/searches/${icpId}/run`, {
@@ -375,12 +393,43 @@ export default function ICPDetailPage() {
         }
     }, [icpId, page, fetchCompanies])
 
-    // Poll for scraper run updates
+    // Poll for scraper run updates with timeout protection
     useEffect(() => {
         if (!isRunningScrapers || !icpId) return
 
+        // Track when polling started
+        if (!pollingStartTimeRef.current) {
+            pollingStartTimeRef.current = Date.now()
+        }
+
+        let pollCount = 0
+
         const pollInterval = setInterval(async () => {
             try {
+                pollCount++
+
+                // Check if we've been polling too long
+                const pollingDuration = Date.now() - (pollingStartTimeRef.current || Date.now())
+                if (pollingDuration > MAX_POLLING_DURATION_MS) {
+                    console.warn('[Polling] Max polling duration exceeded, stopping polling')
+                    toast.error('Some scrapers may have timed out. Check the scraper history for details.', {
+                        duration: 5000,
+                    })
+                    setIsRunningScrapers(false)
+                    pollingStartTimeRef.current = null
+
+                    // Try to cleanup stale runs via API
+                    try {
+                        await fetch(`/api/searches/${icpId}/runs/cleanup`, { method: 'POST' })
+                    } catch {
+                        // Ignore cleanup errors
+                    }
+
+                    // Refresh data to show current state
+                    await refreshAfterScraperCompletion()
+                    return
+                }
+
                 const runsResponse = await fetch(`/api/searches/${icpId}/runs`)
                 if (!runsResponse.ok) return
 
@@ -398,15 +447,25 @@ export default function ICPDetailPage() {
                     id => !completedScraperIdsRef.current.has(id)
                 )
 
-                if (newlyCompleted.length > 0) {
-                    completedScraperIdsRef.current = currentCompleted
+                // Refresh ICP data and companies when new scrapers complete
+                // OR periodically every 5 polls (~10 seconds) to show intermediate updates
+                if (newlyCompleted.length > 0 || pollCount % 5 === 0) {
+                    if (newlyCompleted.length > 0) {
+                        completedScraperIdsRef.current = currentCompleted
+                    }
                     await refreshAfterScraperCompletion()
+                    // Also refresh leads data to show new leads created
+                    await refreshLeads()
                 }
 
                 const allDone = newRuns.length > 0 &&
                     newRuns.every(r => ['completed', 'failed', 'cancelled'].includes(r.status))
                 if (allDone) {
                     setIsRunningScrapers(false)
+                    pollingStartTimeRef.current = null
+                    // Final refresh to ensure everything is up to date
+                    await refreshAfterScraperCompletion()
+                    await refreshLeads()
                 }
             } catch (err) {
                 console.error('Error polling scraper runs:', err)
@@ -414,7 +473,60 @@ export default function ICPDetailPage() {
         }, 2000)
 
         return () => clearInterval(pollInterval)
-    }, [isRunningScrapers, icpId, refreshAfterScraperCompletion])
+    }, [isRunningScrapers, icpId, refreshAfterScraperCompletion, refreshLeads, MAX_POLLING_DURATION_MS])
+
+    // Poll for phone enrichment status
+    useEffect(() => {
+        if (!isPollingPhones || !icpId) return
+
+        // Track when polling started
+        if (!phonePollingStartRef.current) {
+            phonePollingStartRef.current = Date.now()
+        }
+
+        const pollInterval = setInterval(async () => {
+            try {
+                // Check if we've been polling too long
+                const pollingDuration = Date.now() - (phonePollingStartRef.current || Date.now())
+                if (pollingDuration > MAX_PHONE_POLLING_DURATION_MS) {
+                    console.warn('[Phone Polling] Max duration exceeded, stopping polling')
+                    toast.info('Phone enrichment may still be processing in the background. Refresh the page to check for updates.')
+                    setIsPollingPhones(false)
+                    phonePollingStartRef.current = null
+                    return
+                }
+
+                // Check phone status via debug endpoint
+                const response = await fetch('/api/debug/phone-status')
+                if (!response.ok) return
+
+                const data = await response.json()
+                const pending = data.summary?.pending || 0
+
+                // If pending count decreased, phones were received - refresh leads
+                if (pending < pendingPhoneCount) {
+                    console.log(`[Phone Polling] Phones received! Pending: ${pendingPhoneCount} -> ${pending}`)
+                    await refreshLeads()
+                    toast.success(`Phone numbers updated!`, { duration: 3000 })
+                }
+
+                setPendingPhoneCount(pending)
+
+                // Stop polling when no more pending
+                if (pending === 0) {
+                    console.log('[Phone Polling] All phones processed, stopping polling')
+                    setIsPollingPhones(false)
+                    phonePollingStartRef.current = null
+                    // Final refresh
+                    await refreshLeads()
+                }
+            } catch (err) {
+                console.error('Error polling phone status:', err)
+            }
+        }, 3000) // Poll every 3 seconds
+
+        return () => clearInterval(pollInterval)
+    }, [isPollingPhones, icpId, pendingPhoneCount, refreshLeads, MAX_PHONE_POLLING_DURATION_MS])
 
     // Fetch enrichment preview when modal opens
     const fetchEnrichmentPreview = useCallback(async () => {
@@ -518,6 +630,14 @@ export default function ICPDetailPage() {
             toast.success(
                 `Enriched ${result.companiesProcessed} companies! ${result.totalLeadsCreated} leads added.${phoneMessage}`
             )
+
+            // Start phone polling if phone enrichment was requested and leads are queued
+            if (result.phoneEnrichment?.started && result.phoneEnrichment.leadsQueued > 0) {
+                setPendingPhoneCount(result.phoneEnrichment.leadsQueued)
+                phonePollingStartRef.current = Date.now()
+                setIsPollingPhones(true)
+                toast.info('Fetching phone numbers... This may take a moment.', { duration: 4000 })
+            }
 
             setShowEnrichModal(false)
 
@@ -682,7 +802,8 @@ export default function ICPDetailPage() {
                 description: `Running ${scrapers[scraperIndex]?.jobTitle} scraper`,
             })
 
-            // Trigger polling for updates
+            // Reset polling timer and trigger polling for updates
+            pollingStartTimeRef.current = Date.now()
             setIsRunningScrapers(true)
         } catch (err) {
             toast.error('Failed to run scraper', {
@@ -831,6 +952,23 @@ export default function ICPDetailPage() {
                     <div className="text-3xl font-semibold text-black dark:text-white">{leadsStats.totalContacts}</div>
                     <div className="mt-1 text-sm text-black/50 dark:text-white/50">Leads</div>
                 </div>
+                {/* Phone polling indicator */}
+                {isPollingPhones && (
+                    <>
+                        <div className="h-10 w-px bg-black/10 dark:bg-white/10" />
+                        <div className="flex items-center gap-2">
+                            <Loader2 className="size-4 animate-spin text-blue-500" />
+                            <div>
+                                <div className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                                    Fetching phones...
+                                </div>
+                                <div className="text-xs text-black/50 dark:text-white/50">
+                                    {pendingPhoneCount} pending
+                                </div>
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
 
             {/* Tabs */}

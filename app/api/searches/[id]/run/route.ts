@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { searches, companies, jobs, leads, scraperRuns, creditUsage, creditHistory } from "@/lib/db/schema";
 import { requireOrgAuth } from "@/lib/auth";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, lt, inArray } from "drizzle-orm";
 import {
   runLinkedInJobsSearch,
   extractCompaniesFromJobs,
@@ -23,8 +23,72 @@ function parseFullName(fullName: string): { firstName: string; lastName: string 
   return { firstName, lastName };
 }
 
-// Extend timeout for Apify actor runs (can take several minutes per scraper)
-export const maxDuration = 300; // 5 minutes
+// Extend timeout for Apify actor runs - increased for parallel execution
+export const maxDuration = 600; // 10 minutes (increased from 5)
+
+// Timeout for individual scraper (4 minutes each to allow multiple to complete)
+const SCRAPER_TIMEOUT_MS = 4 * 60 * 1000;
+
+// Stale run threshold - runs older than this in "running" state are considered stuck
+const STALE_RUN_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
+
+// Helper to run a promise with timeout
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  timeoutError: string
+): Promise<T> {
+  let timeoutId: NodeJS.Timeout;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(timeoutError)), timeoutMs);
+  });
+
+  try {
+    const result = await Promise.race([promise, timeoutPromise]);
+    clearTimeout(timeoutId!);
+    return result;
+  } catch (error) {
+    clearTimeout(timeoutId!);
+    throw error;
+  }
+}
+
+// Clean up stale scraper runs that got stuck in "running" or "queued" state
+async function cleanupStaleRuns(searchId: string, orgId: string): Promise<number> {
+  const staleThreshold = new Date(Date.now() - STALE_RUN_THRESHOLD_MS);
+
+  // Find runs that are stuck in running/queued state for too long
+  const staleRuns = await db
+    .select({ id: scraperRuns.id, status: scraperRuns.status, startedAt: scraperRuns.startedAt })
+    .from(scraperRuns)
+    .where(
+      and(
+        eq(scraperRuns.searchId, searchId),
+        eq(scraperRuns.orgId, orgId),
+        inArray(scraperRuns.status, ["running", "queued"]),
+        lt(scraperRuns.startedAt, staleThreshold)
+      )
+    );
+
+  if (staleRuns.length === 0) {
+    return 0;
+  }
+
+  console.log(`[Search Run] Found ${staleRuns.length} stale scraper runs, marking as failed`);
+
+  // Mark them as failed
+  const staleRunIds = staleRuns.map(r => r.id);
+  await db
+    .update(scraperRuns)
+    .set({
+      status: "failed",
+      errorMessage: "Scraper timed out - request was terminated before completion",
+      completedAt: new Date(),
+    })
+    .where(inArray(scraperRuns.id, staleRunIds));
+
+  return staleRuns.length;
+}
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -310,8 +374,12 @@ async function runSingleScraper(
       rows: maxRows,
     };
 
-    // Run the LinkedIn Jobs search
-    const jobResults = await runLinkedInJobsSearch(apifyInput);
+    // Run the LinkedIn Jobs search with timeout protection
+    const jobResults = await withTimeout(
+      runLinkedInJobsSearch(apifyInput),
+      SCRAPER_TIMEOUT_MS,
+      `Scraper ${scraperIndex} timed out after ${SCRAPER_TIMEOUT_MS / 1000}s`
+    );
     console.log(`[Search Run] Scraper ${scraperIndex} returned ${jobResults.length} jobs`);
 
     // Process results
@@ -446,13 +514,20 @@ export async function POST(req: Request, { params }: RouteContext) {
 
     console.log(`[Search Run] Running ${scrapersToRun.length} scraper(s)`);
 
-    // Run scrapers sequentially, sharing company deduplication
+    // Clean up any stale runs from previous failed attempts
+    const staleRunsCleanedUp = await cleanupStaleRuns(id, orgId);
+    if (staleRunsCleanedUp > 0) {
+      console.log(`[Search Run] Cleaned up ${staleRunsCleanedUp} stale scraper runs`);
+    }
+
+    // Initialize result tracking
     let totalJobsFound = 0;
     let totalCompaniesFound = 0;
     let totalNewCompanies = 0;
     let totalLeadsCreated = 0;
     let totalCancelled = 0;
-    let companyIdMap = new Map<string, string>();
+    let totalFailed = 0;
+    const companyIdMap = new Map<string, string>();
     const scraperResults: Array<{
       scraperIndex: number;
       scraperConfig: ScraperConfig;
@@ -464,70 +539,97 @@ export async function POST(req: Request, { params }: RouteContext) {
       cancelled?: boolean;
     }> = [];
 
-    // If running multiple scrapers, create all as "queued" first so users can see them
+    // Create all scraper runs as "queued" first so users can see them
     const queuedRunIds: Map<number, string> = new Map();
 
-    if (scrapersToRun.length > 1) {
-      console.log(`[Search Run] Creating ${scrapersToRun.length} queued scraper runs`);
+    console.log(`[Search Run] Creating ${scrapersToRun.length} queued scraper runs`);
 
-      for (const { scraper, index } of scrapersToRun) {
-        const [queuedRun] = await db
-          .insert(scraperRuns)
-          .values({
-            searchId: id,
-            orgId,
-            scraperIndex: index,
-            scraperConfig: scraper,
-            status: "queued",
-          })
-          .returning();
+    for (const { scraper, index } of scrapersToRun) {
+      const [queuedRun] = await db
+        .insert(scraperRuns)
+        .values({
+          searchId: id,
+          orgId,
+          scraperIndex: index,
+          scraperConfig: scraper,
+          status: "queued",
+        })
+        .returning();
 
-        queuedRunIds.set(index, queuedRun.id);
-      }
-
-      console.log(`[Search Run] Created ${queuedRunIds.size} queued runs`);
+      queuedRunIds.set(index, queuedRun.id);
     }
 
-    // Now run scrapers sequentially
-    for (const { scraper, index } of scrapersToRun) {
+    console.log(`[Search Run] Created ${queuedRunIds.size} queued runs, starting parallel execution`);
+
+    // Run all scrapers in parallel using Promise.allSettled for fault tolerance
+    const scraperPromises = scrapersToRun.map(async ({ scraper, index }) => {
       const existingRunId = queuedRunIds.get(index);
 
+      // Each scraper gets its own company map to avoid race conditions
+      // We'll merge results at the end
       const result = await runSingleScraper(
         scraper,
         index,
         orgId,
         id,
         maxRows,
-        companyIdMap,
+        new Map<string, string>(), // Fresh map for each parallel scraper
         existingRunId
       );
 
-      if (result.cancelled) {
-        totalCancelled++;
+      return { scraper, index, result };
+    });
+
+    // Wait for all scrapers to complete (or fail)
+    const settledResults = await Promise.allSettled(scraperPromises);
+
+    // Process all results
+    for (const settledResult of settledResults) {
+      if (settledResult.status === "fulfilled") {
+        const { scraper, index, result } = settledResult.value;
+
+        if (result.cancelled) {
+          totalCancelled++;
+        } else if (result.error) {
+          totalFailed++;
+        } else {
+          totalJobsFound += result.jobsFound;
+          totalNewCompanies += result.newCompanies;
+          totalLeadsCreated += result.leadsCreated;
+        }
+        totalCompaniesFound += result.companiesFound;
+
+        // Merge company IDs
+        for (const [key, value] of result.companyIdMap) {
+          companyIdMap.set(key, value);
+        }
+
+        scraperResults.push({
+          scraperIndex: index,
+          scraperConfig: scraper,
+          scraperRunId: result.scraperRunId,
+          jobsFound: result.jobsFound,
+          newCompanies: result.newCompanies,
+          leadsCreated: result.leadsCreated,
+          error: result.error,
+          cancelled: result.cancelled,
+        });
       } else {
-        totalJobsFound += result.jobsFound;
-        totalCompaniesFound = result.companiesFound;
-        totalNewCompanies += result.newCompanies;
-        totalLeadsCreated += result.leadsCreated;
-      }
-      companyIdMap = result.companyIdMap;
+        // Promise was rejected (unexpected error)
+        console.error(`[Search Run] Scraper promise rejected:`, settledResult.reason);
+        totalFailed++;
 
-      scraperResults.push({
-        scraperIndex: index,
-        scraperConfig: scraper,
-        scraperRunId: result.scraperRunId,
-        jobsFound: result.jobsFound,
-        newCompanies: result.newCompanies,
-        leadsCreated: result.leadsCreated,
-        error: result.error,
-        cancelled: result.cancelled,
-      });
+        // Try to find the index from the error context
+        const errorMessage = settledResult.reason instanceof Error
+          ? settledResult.reason.message
+          : "Unknown error";
 
-      // Small delay between scrapers to avoid rate limiting
-      if (scrapersToRun.length > 1 && !result.cancelled) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // We can't easily get the index here, so we'll log the error
+        console.error(`[Search Run] Unexpected scraper failure: ${errorMessage}`);
       }
     }
+
+    console.log(`[Search Run] Parallel execution complete. Success: ${scraperResults.filter(r => !r.error && !r.cancelled).length}, Failed: ${totalFailed}, Cancelled: ${totalCancelled}`);
 
     // Update search with aggregated results
     await db
