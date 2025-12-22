@@ -15,7 +15,6 @@ import {
     ChevronLeft,
     ChevronRight,
     Search,
-    Filter,
     Briefcase,
     MapPin,
     UserPlus,
@@ -50,6 +49,7 @@ import { AddScraperModal } from '@/components/dashboard/add-scraper-modal'
 import { EditICPModal } from '@/components/dashboard/edit-icp-modal'
 import { DeleteConfirmationDialog } from '@/components/dashboard/delete-confirmation-dialog'
 import { getJobBoardById } from '@/components/icons/job-boards'
+import { FilterCombobox } from '@/components/ui/filter-combobox'
 
 // API response types
 interface ScraperConfig {
@@ -295,14 +295,23 @@ export default function ICPDetailPage() {
         }
     }, [icpId])
 
-    // Fetch companies with server-side pagination
+    // Fetch companies with server-side pagination and filtering
     const fetchCompanies = useCallback(async (pageNum: number) => {
         if (!icpId) return
 
         try {
-            const companiesResponse = await fetch(
-                `/api/companies?searchId=${icpId}&page=${pageNum}&limit=${ITEMS_PER_PAGE}`
-            )
+            const params = new URLSearchParams({
+                searchId: icpId,
+                page: pageNum.toString(),
+                limit: ITEMS_PER_PAGE.toString(),
+            })
+
+            // Add filter params if active
+            if (sizeFilter !== 'all') params.append('size', sizeFilter)
+            if (industryFilter !== 'all') params.append('industry', industryFilter)
+            if (locationFilter !== 'all') params.append('location', locationFilter)
+
+            const companiesResponse = await fetch(`/api/companies?${params}`)
             if (companiesResponse.ok) {
                 const companiesData = await companiesResponse.json()
                 setCompanies(companiesData.companies || [])
@@ -316,7 +325,7 @@ export default function ICPDetailPage() {
         } catch (err) {
             console.error('Error fetching companies:', err)
         }
-    }, [icpId])
+    }, [icpId, sizeFilter, industryFilter, locationFilter])
 
     const fetchData = useCallback(async () => {
         await fetchIcpData()
@@ -330,6 +339,11 @@ export default function ICPDetailPage() {
     useEffect(() => {
         fetchCompanies(page)
     }, [page, fetchCompanies])
+
+    // Reset to page 1 when filters change
+    useEffect(() => {
+        setPage(1)
+    }, [sizeFilter, industryFilter, locationFilter])
 
     // Run all scrapers
     const handleRunScrapers = async () => {
@@ -684,42 +698,19 @@ export default function ICPDetailPage() {
         }
     }
 
+    // Client-side search filter (server handles size/industry/location)
     const filteredCompanies = useMemo(() => {
-        return companies.filter((c) => {
-            // Search filter
-            if (searchQuery) {
-                const query = searchQuery.toLowerCase()
-                const matchesSearch =
-                    c.name.toLowerCase().includes(query) ||
-                    (c.domain?.toLowerCase() || '').includes(query)
-                if (!matchesSearch) return false
-            }
-
-            // Size filter
-            if (sizeFilter !== 'all' && c.size !== sizeFilter) return false
-
-            // Industry filter
-            if (industryFilter !== 'all' && c.industry !== industryFilter) return false
-
-            // Location filter
-            if (locationFilter !== 'all' && c.location !== locationFilter) return false
-
-            return true
-        })
-    }, [companies, searchQuery, sizeFilter, industryFilter, locationFilter])
+        if (!searchQuery) return companies
+        const query = searchQuery.toLowerCase()
+        return companies.filter((c) =>
+            c.name.toLowerCase().includes(query) ||
+            (c.domain?.toLowerCase() || '').includes(query)
+        )
+    }, [companies, searchQuery])
 
     const enrichedCount = useMemo(() => {
         return companies.filter((c) => c.isEnriched).length
     }, [companies])
-
-    // Check if any filters are active
-    const hasActiveFilters = sizeFilter !== 'all' || industryFilter !== 'all' || locationFilter !== 'all'
-
-    const clearAllFilters = () => {
-        setSizeFilter('all')
-        setIndustryFilter('all')
-        setLocationFilter('all')
-    }
 
     const toggleSelectAll = useCallback(() => {
         if (selectedCompanies.length === filteredCompanies.length) {
@@ -1273,55 +1264,37 @@ export default function ICPDetailPage() {
                             />
                         </div>
 
-                        {/* Divider */}
-                        <div className="h-6 w-px bg-black/10 dark:bg-white/10" />
-
                         {/* Size Filter */}
-                        <select
+                        <FilterCombobox
+                            options={filterOptions.sizes}
                             value={sizeFilter}
-                            onChange={(e) => setSizeFilter(e.target.value)}
-                            className="h-9 rounded-lg border border-black/10 bg-white px-3 text-sm text-black focus:border-black/20 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-white/20"
-                        >
-                            <option value="all">All Sizes</option>
-                            {filterOptions.sizes.map((size) => (
-                                <option key={size} value={size}>{size}</option>
-                            ))}
-                        </select>
+                            onChange={setSizeFilter}
+                            placeholder="Size"
+                            searchPlaceholder="Search sizes..."
+                            emptyText="No sizes found."
+                        />
 
                         {/* Industry Filter */}
-                        <select
+                        <FilterCombobox
+                            options={filterOptions.industries}
                             value={industryFilter}
-                            onChange={(e) => setIndustryFilter(e.target.value)}
-                            className="h-9 max-w-[180px] truncate rounded-lg border border-black/10 bg-white px-3 text-sm text-black focus:border-black/20 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-white/20"
-                        >
-                            <option value="all">All Industries</option>
-                            {filterOptions.industries.map((industry) => (
-                                <option key={industry} value={industry}>{industry}</option>
-                            ))}
-                        </select>
+                            onChange={setIndustryFilter}
+                            placeholder="Industry"
+                            searchPlaceholder="Search industries..."
+                            emptyText="No industries found."
+                            className="max-w-[180px]"
+                        />
 
                         {/* Location Filter */}
-                        <select
+                        <FilterCombobox
+                            options={filterOptions.locations}
                             value={locationFilter}
-                            onChange={(e) => setLocationFilter(e.target.value)}
-                            className="h-9 max-w-[180px] truncate rounded-lg border border-black/10 bg-white px-3 text-sm text-black focus:border-black/20 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-white/20"
-                        >
-                            <option value="all">All Locations</option>
-                            {filterOptions.locations.map((location) => (
-                                <option key={location} value={location}>{location}</option>
-                            ))}
-                        </select>
-
-                        {/* Clear Filters Button */}
-                        {hasActiveFilters && (
-                            <button
-                                onClick={clearAllFilters}
-                                className="flex h-9 items-center gap-1.5 rounded-lg border border-black/10 bg-white px-3 text-sm text-black/60 hover:bg-black/5 dark:border-white/10 dark:bg-white/5 dark:text-white/60 dark:hover:bg-white/10"
-                            >
-                                <X className="size-3" />
-                                Clear
-                            </button>
-                        )}
+                            onChange={setLocationFilter}
+                            placeholder="Location"
+                            searchPlaceholder="Search locations..."
+                            emptyText="No locations found."
+                            className="max-w-[180px]"
+                        />
 
                         {/* Spacer */}
                         <div className="flex-1" />

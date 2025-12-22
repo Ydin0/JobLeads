@@ -15,18 +15,41 @@ export async function GET(req: Request) {
     const offset = (page - 1) * limit;
     const searchId = searchParams.get("searchId");
 
-    // Build where clause - always filter by orgId, optionally by searchId
-    const whereClause = searchId
-      ? and(eq(companies.orgId, orgId), eq(companies.searchId, searchId))
-      : eq(companies.orgId, orgId);
+    // Filter parameters (comma-separated for multi-select)
+    const sizeFilter = searchParams.get("size");
+    const industryFilter = searchParams.get("industry");
+    const locationFilter = searchParams.get("location");
 
-    // Get total count for pagination (single query)
+    // Build base where clause (always filter by orgId, optionally by searchId)
+    const baseConditions: ReturnType<typeof eq>[] = [eq(companies.orgId, orgId)];
+    if (searchId) {
+      baseConditions.push(eq(companies.searchId, searchId));
+    }
+    const baseWhereClause = and(...baseConditions);
+
+    // Build filtered where clause (includes size, industry, location filters)
+    const filterConditions = [...baseConditions];
+    if (sizeFilter) {
+      const sizes = sizeFilter.split(",").map(s => s.trim());
+      filterConditions.push(inArray(companies.size, sizes));
+    }
+    if (industryFilter) {
+      const industries = industryFilter.split(",").map(i => i.trim());
+      filterConditions.push(inArray(companies.industry, industries));
+    }
+    if (locationFilter) {
+      const locations = locationFilter.split(",").map(l => l.trim());
+      filterConditions.push(inArray(companies.location, locations));
+    }
+    const filteredWhereClause = and(...filterConditions);
+
+    // Get total count for pagination (with filters applied)
     const [{ totalCount }] = await db
       .select({ totalCount: count() })
       .from(companies)
-      .where(whereClause);
+      .where(filteredWhereClause);
 
-    // Get unique filter options for ALL companies (not just current page)
+    // Get unique filter options for ALL companies (without filters - so users see all options)
     const [filterOptionsResult] = await db
       .select({
         sizes: sql<string[]>`COALESCE(array_agg(DISTINCT ${companies.size}) FILTER (WHERE ${companies.size} IS NOT NULL), ARRAY[]::text[])`,
@@ -34,7 +57,7 @@ export async function GET(req: Request) {
         locations: sql<string[]>`COALESCE(array_agg(DISTINCT ${companies.location}) FILTER (WHERE ${companies.location} IS NOT NULL), ARRAY[]::text[])`,
       })
       .from(companies)
-      .where(whereClause);
+      .where(baseWhereClause);
 
     const filterOptions = {
       sizes: (filterOptionsResult?.sizes || []).sort(),
@@ -69,7 +92,7 @@ export async function GET(req: Request) {
         jobsCount: sql<number>`COALESCE((SELECT COUNT(*)::int FROM jobs WHERE jobs.company_id = ${companies.id}), 0)`.as("jobs_count"),
       })
       .from(companies)
-      .where(whereClause)
+      .where(filteredWhereClause)
       .orderBy(desc(companies.createdAt))
       .limit(limit)
       .offset(offset);
