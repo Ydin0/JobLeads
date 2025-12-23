@@ -16,6 +16,7 @@ import {
     Contact,
     Target,
     Upload,
+    Headphones,
 } from 'lucide-react'
 import { PricingModal } from './pricing-modal'
 
@@ -25,6 +26,7 @@ interface NavItem {
     href: string
     icon: React.ComponentType<{ className?: string }>
     comingSoon?: boolean
+    badge?: 'NEW' | 'BETA'
 }
 
 interface NavSection {
@@ -46,6 +48,12 @@ const navigationSections: NavSection[] = [
         items: [
             { name: 'Prospects', href: '/dashboard/prospects', icon: Users, comingSoon: true },
             { name: 'Leads', href: '/dashboard/leads', icon: Contact, comingSoon: true },
+        ]
+    },
+    {
+        label: 'TRAINING',
+        items: [
+            { name: 'AI Trainer', href: '/dashboard/trainer', icon: Headphones, badge: 'NEW' },
         ]
     },
     {
@@ -142,6 +150,11 @@ export function DashboardSidebar() {
                                                     isActive ? "text-black dark:text-white" : "text-black/40 dark:text-white/40"
                                                 )} />
                                                 <span>{item.name}</span>
+                                                {item.badge === 'NEW' && (
+                                                    <span className="ml-auto rounded-full bg-[#EDE9FE] px-2 py-0.5 text-[10px] font-medium text-[#7C3AED] dark:bg-purple-500/20 dark:text-purple-300">
+                                                        NEW
+                                                    </span>
+                                                )}
                                             </Link>
                                         </li>
                                     )
