@@ -126,26 +126,6 @@ export function MultiSelectFilter({
                     </CommandList>
                 </Command>
             </PopoverContent>
-
-            {/* Selected values chips below */}
-            {hasSelection && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                    {selectedValues.map((value) => (
-                        <span
-                            key={value}
-                            className="inline-flex items-center gap-1 rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium text-black dark:bg-white/10 dark:text-white"
-                        >
-                            {value}
-                            <button
-                                onClick={(e) => removeValue(value, e)}
-                                className="ml-0.5 rounded-full p-0.5 transition-colors hover:bg-black/10 dark:hover:bg-white/20"
-                            >
-                                <X className="size-2.5" />
-                            </button>
-                        </span>
-                    ))}
-                </div>
-            )}
         </Popover>
     )
 }

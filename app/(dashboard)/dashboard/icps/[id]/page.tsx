@@ -1322,6 +1322,64 @@ export default function ICPDetailPage() {
                         )}
                     </div>
 
+                    {/* Selected filters chips row */}
+                    {(sizeFilter.length > 0 || industryFilter.length > 0 || locationFilter.length > 0) && (
+                        <div className="flex flex-wrap items-center gap-2">
+                            {sizeFilter.map((size) => (
+                                <span
+                                    key={`size-${size}`}
+                                    className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 dark:bg-blue-500/10 dark:text-blue-400"
+                                >
+                                    {size}
+                                    <button
+                                        onClick={() => setSizeFilter(sizeFilter.filter(s => s !== size))}
+                                        className="ml-0.5 rounded-full p-0.5 transition-colors hover:bg-blue-100 dark:hover:bg-blue-500/20"
+                                    >
+                                        <X className="size-3" />
+                                    </button>
+                                </span>
+                            ))}
+                            {industryFilter.map((industry) => (
+                                <span
+                                    key={`industry-${industry}`}
+                                    className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-600 dark:bg-purple-500/10 dark:text-purple-400"
+                                >
+                                    {industry}
+                                    <button
+                                        onClick={() => setIndustryFilter(industryFilter.filter(i => i !== industry))}
+                                        className="ml-0.5 rounded-full p-0.5 transition-colors hover:bg-purple-100 dark:hover:bg-purple-500/20"
+                                    >
+                                        <X className="size-3" />
+                                    </button>
+                                </span>
+                            ))}
+                            {locationFilter.map((location) => (
+                                <span
+                                    key={`location-${location}`}
+                                    className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-600 dark:bg-green-500/10 dark:text-green-400"
+                                >
+                                    {location}
+                                    <button
+                                        onClick={() => setLocationFilter(locationFilter.filter(l => l !== location))}
+                                        className="ml-0.5 rounded-full p-0.5 transition-colors hover:bg-green-100 dark:hover:bg-green-500/20"
+                                    >
+                                        <X className="size-3" />
+                                    </button>
+                                </span>
+                            ))}
+                            <button
+                                onClick={() => {
+                                    setSizeFilter([])
+                                    setIndustryFilter([])
+                                    setLocationFilter([])
+                                }}
+                                className="text-xs text-black/50 hover:text-black dark:text-white/50 dark:hover:text-white"
+                            >
+                                Clear all
+                            </button>
+                        </div>
+                    )}
+
                     {filteredCompanies.length === 0 ? (
                         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-black/10 py-16 dark:border-white/10">
                             <Building2 className="size-10 text-black/20 dark:text-white/20" />
