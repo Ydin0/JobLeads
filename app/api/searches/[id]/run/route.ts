@@ -5,12 +5,19 @@ import { requireOrgAuth } from "@/lib/auth";
 import { eq, and, sql, lt, inArray } from "drizzle-orm";
 import {
   runLinkedInJobsSearch,
+  runMultiJobBoardSearch,
   extractCompaniesFromJobs,
+  extractCompaniesFromNormalizedJobs,
   LinkedInJobsInput,
   LinkedInJobResult,
+  NormalizedJobResult,
 } from "@/lib/apify";
 import { categorizeJob, extractTechStack } from "@/lib/job-analysis";
 import { enrichCompaniesInBatch } from "@/lib/company-enrichment";
+import { createLogger } from "@/lib/logger";
+
+// Create a logger for search run operations
+const log = createLogger({ prefix: "SearchRun" });
 
 // Helper to parse full name into first and last name
 function parseFullName(fullName: string): { firstName: string; lastName: string } {
@@ -74,7 +81,7 @@ async function cleanupStaleRuns(searchId: string, orgId: string): Promise<number
     return 0;
   }
 
-  console.log(`[Search Run] Found ${staleRuns.length} stale scraper runs, marking as failed`);
+  log.info(`Found ${staleRuns.length} stale scraper runs, marking as failed`);
 
   // Mark them as failed
   const staleRunIds = staleRuns.map(r => r.id);
@@ -175,7 +182,7 @@ async function processJobResults(
     const withLinkedIn = companiesToEnrich.filter(c => c.linkedinUrl);
 
     if (withLinkedIn.length > 0) {
-      console.log(`[Search Run] Batch enriching ${withLinkedIn.length} companies with LinkedIn URLs...`);
+      log.info(`Batch enriching ${withLinkedIn.length} companies with LinkedIn URLs...`);
 
       try {
         // Await enrichment to ensure it completes before function terminates
@@ -187,13 +194,13 @@ async function processJobResults(
           }))
         );
         const successful = enrichmentResults.filter(r => r.success).length;
-        console.log(`[Search Run] Batch enriched ${successful}/${enrichmentResults.length} companies`);
+        log.info(`Batch enriched ${successful}/${enrichmentResults.length} companies`);
       } catch (err) {
-        console.error("[Search Run] Batch enrichment failed:", err);
+        log.error("Batch enrichment failed:", err);
         // Don't fail the whole scraper run if enrichment fails
       }
     } else {
-      console.log(`[Search Run] No companies with LinkedIn URLs to enrich`);
+      log.debug(`No companies with LinkedIn URLs to enrich`);
     }
   }
 
@@ -285,7 +292,135 @@ async function processJobResults(
   };
 }
 
+// Process normalized job results from any job board
+async function processNormalizedJobResults(
+  jobResults: NormalizedJobResult[],
+  orgId: string,
+  searchId: string,
+  existingCompanyMap: Map<string, string>
+): Promise<{
+  companiesStored: number;
+  newCompanies: number;
+  jobsStored: number;
+  leadsCreated: number;
+  companyIdMap: Map<string, string>;
+}> {
+  // Extract unique companies from normalized results
+  const extractedCompanies = extractCompaniesFromNormalizedJobs(jobResults);
+
+  // Store companies in database and track their IDs
+  const companyIdMap = new Map<string, string>(existingCompanyMap);
+  let newCompanies = 0;
+  const companiesToEnrich: Array<{ id: string; name: string; linkedinUrl: string | null }> = [];
+
+  for (const company of extractedCompanies) {
+    const companyKey = company.name.toLowerCase();
+
+    // Skip if we already have this company
+    if (companyIdMap.has(companyKey)) continue;
+
+    // Determine if the URL is a LinkedIn URL for enrichment
+    const isLinkedInUrl = company.companyUrl?.includes('linkedin.com');
+
+    const [inserted] = await db
+      .insert(companies)
+      .values({
+        orgId,
+        searchId,
+        name: company.name,
+        linkedinUrl: isLinkedInUrl ? company.companyUrl : null,
+        websiteUrl: !isLinkedInUrl && company.companyUrl ? company.companyUrl : null,
+        metadata: {
+          companyId: company.companyId,
+          jobCount: company.jobCount,
+          sources: company.sources,
+        },
+      })
+      .onConflictDoNothing()
+      .returning();
+
+    if (inserted) {
+      newCompanies++;
+      companyIdMap.set(companyKey, inserted.id);
+      // Queue for auto-enrichment if we have a LinkedIn URL
+      if (isLinkedInUrl) {
+        companiesToEnrich.push({
+          id: inserted.id,
+          name: company.name,
+          linkedinUrl: company.companyUrl,
+        });
+      }
+    }
+  }
+
+  // Batch enrich new companies using LinkedIn scraper
+  if (companiesToEnrich.length > 0) {
+    log.info(`Batch enriching ${companiesToEnrich.length} companies with LinkedIn URLs...`);
+
+    try {
+      const enrichmentResults = await enrichCompaniesInBatch(
+        companiesToEnrich.map(c => ({
+          companyId: c.id,
+          name: c.name,
+          linkedinUrl: c.linkedinUrl!,
+        }))
+      );
+      const successful = enrichmentResults.filter(r => r.success).length;
+      log.info(`Batch enriched ${successful}/${enrichmentResults.length} companies`);
+    } catch (err) {
+      log.error("Batch enrichment failed:", err);
+    }
+  }
+
+  // Store jobs in database
+  let jobsStored = 0;
+  for (const job of jobResults) {
+    if (!job.companyName) continue;
+
+    const companyId = companyIdMap.get(job.companyName.toLowerCase());
+    if (!companyId) continue;
+
+    try {
+      const department = categorizeJob(job.title);
+      const techStack = extractTechStack(job.description);
+
+      await db.insert(jobs).values({
+        orgId,
+        companyId,
+        searchId,
+        externalId: job.id?.toString(),
+        title: job.title,
+        jobUrl: job.jobUrl,
+        location: job.location,
+        salary: job.salary,
+        contractType: job.contractType,
+        experienceLevel: job.experienceLevel,
+        workType: job.workType,
+        department,
+        techStack,
+        description: job.description,
+        publishedAt: job.publishedAt ? new Date(job.publishedAt) : null,
+        metadata: {
+          source: job.source,
+        },
+      }).onConflictDoNothing();
+      jobsStored++;
+    } catch (err) {
+      console.error("[Search Run] Error storing job:", err);
+    }
+  }
+
+  return {
+    companiesStored: companyIdMap.size,
+    newCompanies,
+    jobsStored,
+    leadsCreated: 0, // Normalized results don't include poster info
+    companyIdMap,
+  };
+}
+
 // Run a single scraper (can accept pre-created run ID or create new one)
+// Now supports multiple job boards
 async function runSingleScraper(
   scraper: ScraperConfig,
   scraperIndex: number,
@@ -293,6 +428,7 @@ async function runSingleScraper(
   searchId: string,
   maxRows: number,
   existingCompanyMap: Map<string, string>,
+  jobBoards: string[] = ["linkedin"],
   existingRunId?: string
 ): Promise<{
   scraperRunId: string;
@@ -327,7 +463,7 @@ async function runSingleScraper(
     }
 
     if (existingRun.status === "cancelled") {
-      console.log(`[Search Run] Scraper ${scraperIndex} was cancelled, skipping`);
+      log.info(`Scraper ${scraperIndex} was cancelled, skipping`);
       return {
         scraperRunId: existingRunId,
         jobsFound: 0,
@@ -366,25 +502,61 @@ async function runSingleScraper(
   }
 
   try {
-    console.log(`[Search Run] Running scraper ${scraperIndex}: "${scraper.jobTitle}" in "${scraper.location}"`);
+    log.info(`Running scraper ${scraperIndex}: "${scraper.jobTitle}" in "${scraper.location}" on ${jobBoards.join(", ")}`);
 
-    // Build Apify input for this specific scraper
-    const apifyInput: LinkedInJobsInput = {
-      title: scraper.jobTitle,
-      location: scraper.location,
-      rows: maxRows,
+    // Check if we should use multi-board search or just LinkedIn
+    const useMultiBoard = jobBoards.length > 0 && !(jobBoards.length === 1 && jobBoards[0] === "linkedin");
+
+    let totalJobsFound = 0;
+    let results: {
+      companiesStored: number;
+      newCompanies: number;
+      jobsStored: number;
+      leadsCreated: number;
+      companyIdMap: Map<string, string>;
     };
 
-    // Run the LinkedIn Jobs search with timeout protection
-    const jobResults = await withTimeout(
-      runLinkedInJobsSearch(apifyInput),
-      SCRAPER_TIMEOUT_MS,
-      `Scraper ${scraperIndex} timed out after ${SCRAPER_TIMEOUT_MS / 1000}s`
-    );
-    console.log(`[Search Run] Scraper ${scraperIndex} returned ${jobResults.length} jobs`);
+    if (useMultiBoard) {
+      // Build multi-board search input
+      const multiSearchInput = {
+        jobBoards: jobBoards,
+        query: scraper.jobTitle,
+        location: scraper.location,
+        maxResults: Math.ceil(maxRows / jobBoards.length), // Distribute maxRows across boards
+      };
 
-    // Process results
-    const results = await processJobResults(jobResults, orgId, searchId, existingCompanyMap);
+      // Run multi-board search with timeout protection
+      const normalizedResults = await withTimeout(
+        runMultiJobBoardSearch(multiSearchInput),
+        SCRAPER_TIMEOUT_MS,
+        `Scraper ${scraperIndex} timed out after ${SCRAPER_TIMEOUT_MS / 1000}s`
+      );
+
+      totalJobsFound = normalizedResults.length;
+      log.info(`Scraper ${scraperIndex} returned ${totalJobsFound} jobs from ${jobBoards.length} job boards`);
+
+      // Process normalized results
+      results = await processNormalizedJobResults(normalizedResults, orgId, searchId, existingCompanyMap);
+    } else {
+      // Use LinkedIn-only search (preserves poster info for leads)
+      const apifyInput: LinkedInJobsInput = {
+        title: scraper.jobTitle,
+        location: scraper.location,
+        rows: maxRows,
+      };
+
+      const jobResults = await withTimeout(
+        runLinkedInJobsSearch(apifyInput),
+        SCRAPER_TIMEOUT_MS,
+        `Scraper ${scraperIndex} timed out after ${SCRAPER_TIMEOUT_MS / 1000}s`
+      );
+
+      totalJobsFound = jobResults.length;
+      log.info(`Scraper ${scraperIndex} returned ${totalJobsFound} jobs from LinkedIn`);
+
+      // Process LinkedIn results (includes lead creation from posters)
+      results = await processJobResults(jobResults, orgId, searchId, existingCompanyMap);
+    }
 
     // Calculate duration
     const duration = Math.round((Date.now() - startTime) / 1000);
@@ -394,7 +566,7 @@ async function runSingleScraper(
       .update(scraperRuns)
       .set({
         status: "completed",
-        jobsFound: jobResults.length,
+        jobsFound: totalJobsFound,
         companiesFound: results.companiesStored,
         newCompanies: results.newCompanies,
         leadsCreated: results.leadsCreated,
@@ -405,7 +577,7 @@ async function runSingleScraper(
 
     return {
       scraperRunId,
-      jobsFound: jobResults.length,
+      jobsFound: totalJobsFound,
       companiesFound: results.companiesStored,
       newCompanies: results.newCompanies,
       leadsCreated: results.leadsCreated,
@@ -443,10 +615,10 @@ async function runSingleScraper(
 // POST /api/searches/[id]/run - Execute scrapers and store results
 export async function POST(req: Request, { params }: RouteContext) {
   try {
-    console.log("[Search Run] Starting search execution...");
+    log.info("Starting search execution...");
     const { orgId, userId } = await requireOrgAuth();
     const { id } = await params;
-    console.log("[Search Run] Org ID:", orgId, "Search ID:", id);
+    log.debug("Org ID:", orgId, "Search ID:", id);
 
     // Get optional scraper index from body
     const body = await req.json().catch(() => ({}));
@@ -458,14 +630,15 @@ export async function POST(req: Request, { params }: RouteContext) {
     });
 
     if (!search) {
-      console.log("[Search Run] Search not found");
+      log.warn("Search not found");
       return NextResponse.json({ error: "Search not found" }, { status: 404 });
     }
-    console.log("[Search Run] Found search:", search.name);
+    log.info("Found search:", search.name);
 
     const filters = search.filters as SearchFilters | null;
     const scrapers = filters?.scrapers || [];
     const maxRows = filters?.maxRows || 100;
+    const jobBoards = filters?.jobBoards || ["linkedin"]; // Default to LinkedIn if not specified
 
     // Check credit availability before running
     const credits = await db.query.creditUsage.findFirst({
@@ -473,7 +646,7 @@ export async function POST(req: Request, { params }: RouteContext) {
     });
 
     if (credits && credits.icpUsed >= credits.icpLimit) {
-      console.log("[Search Run] Insufficient ICP credits");
+      log.warn("Insufficient ICP credits");
       return NextResponse.json(
         { error: "Insufficient ICP credits. Please upgrade your plan to continue." },
         { status: 402 }
@@ -482,7 +655,7 @@ export async function POST(req: Request, { params }: RouteContext) {
 
     // If no scrapers configured, fall back to legacy behavior
     if (scrapers.length === 0) {
-      console.log("[Search Run] No scrapers configured, using legacy job titles");
+      log.info("No scrapers configured, using legacy job titles");
 
       // Create a single scraper from legacy config
       const legacyScraper: ScraperConfig = {
@@ -513,12 +686,12 @@ export async function POST(req: Request, { params }: RouteContext) {
       );
     }
 
-    console.log(`[Search Run] Running ${scrapersToRun.length} scraper(s)`);
+    log.info(`Running ${scrapersToRun.length} scraper(s)`);
 
     // Clean up any stale runs from previous failed attempts
     const staleRunsCleanedUp = await cleanupStaleRuns(id, orgId);
     if (staleRunsCleanedUp > 0) {
-      console.log(`[Search Run] Cleaned up ${staleRunsCleanedUp} stale scraper runs`);
+      log.info(`Cleaned up ${staleRunsCleanedUp} stale scraper runs`);
     }
 
     // Initialize result tracking
@@ -543,7 +716,7 @@ export async function POST(req: Request, { params }: RouteContext) {
     // Create all scraper runs as "queued" first so users can see them
     const queuedRunIds: Map<number, string> = new Map();
 
-    console.log(`[Search Run] Creating ${scrapersToRun.length} queued scraper runs`);
+    log.info(`Creating ${scrapersToRun.length} queued scraper runs`);
 
     for (const { scraper, index } of scrapersToRun) {
       const [queuedRun] = await db
@@ -560,7 +733,8 @@ export async function POST(req: Request, { params }: RouteContext) {
       queuedRunIds.set(index, queuedRun.id);
     }
 
-    console.log(`[Search Run] Created ${queuedRunIds.size} queued runs, starting parallel execution`);
+    log.info(`Created ${queuedRunIds.size} queued runs, starting parallel execution`);
+    log.debug(`Using job boards: ${jobBoards.join(", ")}`);
 
     // Run all scrapers in parallel using Promise.allSettled for fault tolerance
     const scraperPromises = scrapersToRun.map(async ({ scraper, index }) => {
@@ -575,6 +749,7 @@ export async function POST(req: Request, { params }: RouteContext) {
         id,
         maxRows,
         new Map<string, string>(), // Fresh map for each parallel scraper
+        jobBoards,
         existingRunId
       );
 
@@ -617,7 +792,7 @@ export async function POST(req: Request, { params }: RouteContext) {
         });
       } else {
         // Promise was rejected (unexpected error)
-        console.error(`[Search Run] Scraper promise rejected:`, settledResult.reason);
+        log.error(`Scraper promise rejected:`, settledResult.reason);
         totalFailed++;
 
         // Try to find the index from the error context
@@ -626,11 +801,11 @@ export async function POST(req: Request, { params }: RouteContext) {
           : "Unknown error";
 
         // We can't easily get the index here, so we'll log the error
-        console.error(`[Search Run] Unexpected scraper failure: ${errorMessage}`);
+        log.error(`Unexpected scraper failure: ${errorMessage}`);
       }
     }
 
-    console.log(`[Search Run] Parallel execution complete. Success: ${scraperResults.filter(r => !r.error && !r.cancelled).length}, Failed: ${totalFailed}, Cancelled: ${totalCancelled}`);
+    log.info(`Parallel execution complete. Success: ${scraperResults.filter(r => !r.error && !r.cancelled).length}, Failed: ${totalFailed}, Cancelled: ${totalCancelled}`);
 
     // Update search with aggregated results
     await db
@@ -645,7 +820,7 @@ export async function POST(req: Request, { params }: RouteContext) {
 
     // Deduct ICP credits for new companies found (1 credit per company)
     if (totalNewCompanies > 0) {
-      console.log(`[Search Run] Deducting ${totalNewCompanies} ICP credits for new companies`);
+      log.info(`Deducting ${totalNewCompanies} ICP credits for new companies`);
 
       // Update credit usage
       const [updatedCredits] = await db
@@ -676,7 +851,7 @@ export async function POST(req: Request, { params }: RouteContext) {
       });
     }
 
-    console.log(`[Search Run] Completed: ${totalJobsFound} jobs, ${totalNewCompanies} new companies, ${totalLeadsCreated} leads`);
+    log.info(`Completed: ${totalJobsFound} jobs, ${totalNewCompanies} new companies, ${totalLeadsCreated} leads`);
 
     return NextResponse.json({
       success: true,
@@ -688,7 +863,7 @@ export async function POST(req: Request, { params }: RouteContext) {
       scraperResults,
     });
   } catch (error) {
-    console.error("Error running search:", error);
+    log.error("Error running search:", error);
     return NextResponse.json(
       {
         error: "Failed to run search",

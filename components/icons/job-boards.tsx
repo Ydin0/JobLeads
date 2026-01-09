@@ -42,9 +42,6 @@ export const jobBoardOptions = [
     { id: 'linkedin', label: 'LinkedIn', Icon: LinkedInIcon, color: 'text-[#0A66C2]' },
     { id: 'indeed', label: 'Indeed', Icon: IndeedIcon, color: 'text-[#2164F3]' },
     { id: 'glassdoor', label: 'Glassdoor', Icon: GlassdoorIcon, color: 'text-[#0CAA41]' },
-    { id: 'wellfound', label: 'Wellfound', Icon: WellfoundIcon, color: 'text-black dark:text-white' },
-    { id: 'builtin', label: 'BuiltIn', Icon: BuiltInIcon, color: 'text-[#1D4ED8]' },
-    { id: 'dice', label: 'Dice', Icon: DiceIcon, color: 'text-[#EB1C26]' },
 ] as const
 
 // Get job board option by ID

@@ -63,7 +63,7 @@ export async function POST(req: Request) {
             updatedAt: now,
           })
           .where(sql`${leads.metadata}->>'apolloId' = ${apolloId}`)
-          .returning({ id: leads.id });
+          .returning();
 
         if (result.length > 0) {
           updated += result.length;
