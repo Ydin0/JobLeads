@@ -4,7 +4,6 @@ import { leads, creditUsage, organizationMembers } from '@/lib/db/schema'
 import { requireOrgAuth, checkMemberCredits } from '@/lib/auth'
 import { eq, and, sql } from 'drizzle-orm'
 import { bulkEnrichPeople } from '@/lib/apollo'
-import { PLANS } from '@/lib/plans'
 
 // POST /api/leads/[id]/fetch-phone - Fetch phone number for a specific lead
 export async function POST(
@@ -67,16 +66,12 @@ export async function POST(
       const cycleEnd = new Date(now)
       cycleEnd.setMonth(cycleEnd.getMonth() + 1)
 
-      // Use plan-based defaults
-      const enrichmentLimit = PLANS.free.enrichmentLimit
-      const icpLimit = PLANS.free.icpLimit
-
       const [newCredits] = await db
         .insert(creditUsage)
         .values({
           orgId,
-          enrichmentLimit,
-          icpLimit,
+          enrichmentLimit: 200,
+          icpLimit: 1000,
           enrichmentUsed: 0,
           icpUsed: 0,
           billingCycleStart: now,
@@ -99,20 +94,14 @@ export async function POST(
 
     console.log(`[Fetch Phone] Looking up phone for lead ${leadId} (Apollo ID: ${apolloId})`)
 
-    // Get the webhook URL for phone enrichment (required by Apollo for phone reveal)
+    // Get the webhook URL for phone enrichment (optional - phone may be returned immediately)
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
     const webhookUrl = baseUrl
       ? `${baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`}/api/webhooks/apollo/phones`
       : undefined
 
     if (!webhookUrl) {
-      return NextResponse.json(
-        { 
-          error: 'Phone lookup not available', 
-          details: 'NEXT_PUBLIC_APP_URL environment variable must be configured for phone lookups. Apollo requires a webhook URL to deliver phone numbers.' 
-        },
-        { status: 503 }
-      )
+      console.log('[Fetch Phone] No webhook URL configured - phone lookup will only work if returned immediately')
     }
 
     // Call Apollo to get phone number
