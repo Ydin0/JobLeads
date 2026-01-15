@@ -310,10 +310,10 @@ export default function ICPDetailPage() {
                 limit: ITEMS_PER_PAGE.toString(),
             })
 
-            // Add filter params if active (comma-separated for multi-select)
-            if (sizeFilter.length > 0) params.append('size', sizeFilter.join(','))
-            if (industryFilter.length > 0) params.append('industry', industryFilter.join(','))
-            if (locationFilter.length > 0) params.append('location', locationFilter.join(','))
+            // Add filter params if active (pipe-separated for multi-select to handle values with commas)
+            if (sizeFilter.length > 0) params.append('size', sizeFilter.join('|'))
+            if (industryFilter.length > 0) params.append('industry', industryFilter.join('|'))
+            if (locationFilter.length > 0) params.append('location', locationFilter.join('|'))
 
             const companiesResponse = await fetch(`/api/companies?${params}`)
             if (companiesResponse.ok) {

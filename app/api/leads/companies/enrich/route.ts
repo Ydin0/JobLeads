@@ -4,8 +4,10 @@ import {
   companies,
   employees,
   leads,
-  organizations,
+  creditUsage,
+  organizationMembers,
   enrichmentTransactions,
+  organizations,
 } from '@/lib/db/schema'
 import { requireOrgAuth } from '@/lib/auth'
 import { eq, and, sql, inArray } from 'drizzle-orm'
@@ -100,16 +102,63 @@ export async function POST(req: Request) {
       `[Leads Enrich] Processing ${companiesWithDomains.length} companies with domains, ${companiesWithoutDomains.length} without (fetchAll: ${fetchAll})`
     )
 
-    // Get org credit info
-    const org = await db.query.organizations.findFirst({
-      where: eq(organizations.id, orgId),
+    // Get or create org credit usage record
+    let credits = await db.query.creditUsage.findFirst({
+      where: eq(creditUsage.orgId, orgId),
     })
 
-    if (!org) {
-      return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
+    if (!credits) {
+      const now = new Date()
+      const cycleEnd = new Date(now)
+      cycleEnd.setMonth(cycleEnd.getMonth() + 1)
+
+      const [newCredits] = await db
+        .insert(creditUsage)
+        .values({
+          orgId,
+          enrichmentLimit: 200,
+          icpLimit: 1000,
+          enrichmentUsed: 0,
+          icpUsed: 0,
+          billingCycleStart: now,
+          billingCycleEnd: cycleEnd,
+          planId: 'free',
+        })
+        .returning()
+
+      credits = newCredits
     }
 
-    let creditsRemaining = (org.creditsLimit || 30) - (org.creditsUsed || 0)
+    // Check if billing cycle has ended and reset if needed
+    const now = new Date()
+    if (credits.billingCycleEnd && new Date(credits.billingCycleEnd) < now) {
+      const cycleEnd = new Date(now)
+      cycleEnd.setMonth(cycleEnd.getMonth() + 1)
+
+      const [updatedCredits] = await db
+        .update(creditUsage)
+        .set({
+          enrichmentUsed: 0,
+          icpUsed: 0,
+          billingCycleStart: now,
+          billingCycleEnd: cycleEnd,
+          updatedAt: now,
+        })
+        .where(eq(creditUsage.orgId, orgId))
+        .returning()
+
+      credits = updatedCredits
+
+      await db
+        .update(organizationMembers)
+        .set({
+          enrichmentUsed: 0,
+          icpUsed: 0,
+          updatedAt: now,
+        })
+        .where(eq(organizationMembers.orgId, orgId))
+    }
+
     let totalCreditsUsed = 0
     let totalEmployeesFound = 0
     let totalEmployeesCreated = 0
@@ -350,7 +399,6 @@ export async function POST(req: Request) {
         }
 
         // Update credits
-        creditsRemaining -= leadsCreated
         totalCreditsUsed += leadsCreated
         totalEmployeesCreated += employeesCreated
         totalLeadsCreated += leadsCreated
@@ -400,15 +448,23 @@ export async function POST(req: Request) {
     // leadsForPhoneEnrichment tracks leads waiting for phone numbers via webhook
     const phoneEnrichmentStarted = revealPhoneNumbers && leadsForPhoneEnrichment.length > 0
 
-    // Update org credits in one operation
+    // Update org and member credits in one operation
     if (totalCreditsUsed > 0) {
       await db
-        .update(organizations)
+        .update(creditUsage)
         .set({
-          creditsUsed: sql`${organizations.creditsUsed} + ${totalCreditsUsed}`,
+          enrichmentUsed: sql`${creditUsage.enrichmentUsed} + ${totalCreditsUsed}`,
           updatedAt: new Date(),
         })
-        .where(eq(organizations.id, orgId))
+        .where(eq(creditUsage.orgId, orgId))
+
+      await db
+        .update(organizationMembers)
+        .set({
+          enrichmentUsed: sql`${organizationMembers.enrichmentUsed} + ${totalCreditsUsed}`,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(organizationMembers.orgId, orgId), eq(organizationMembers.userId, userId)))
     }
 
     // Log transaction

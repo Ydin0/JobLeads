@@ -15,7 +15,7 @@ export async function GET(req: Request) {
     const offset = (page - 1) * limit;
     const searchId = searchParams.get("searchId");
 
-    // Filter parameters (comma-separated for multi-select)
+    // Filter parameters (pipe-separated for multi-select to handle values containing commas)
     const sizeFilter = searchParams.get("size");
     const industryFilter = searchParams.get("industry");
     const locationFilter = searchParams.get("location");
@@ -30,15 +30,15 @@ export async function GET(req: Request) {
     // Build filtered where clause (includes size, industry, location filters)
     const filterConditions = [...baseConditions];
     if (sizeFilter) {
-      const sizes = sizeFilter.split(",").map(s => s.trim());
+      const sizes = sizeFilter.split("|").map(s => s.trim()).filter(Boolean);
       filterConditions.push(inArray(companies.size, sizes));
     }
     if (industryFilter) {
-      const industries = industryFilter.split(",").map(i => i.trim());
+      const industries = industryFilter.split("|").map(i => i.trim()).filter(Boolean);
       filterConditions.push(inArray(companies.industry, industries));
     }
     if (locationFilter) {
-      const locations = locationFilter.split(",").map(l => l.trim());
+      const locations = locationFilter.split("|").map(l => l.trim()).filter(Boolean);
       filterConditions.push(inArray(companies.location, locations));
     }
     const filteredWhereClause = and(...filterConditions);
