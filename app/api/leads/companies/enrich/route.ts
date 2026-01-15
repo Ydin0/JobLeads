@@ -8,6 +8,7 @@ import {
   organizationMembers,
   enrichmentTransactions,
   organizations,
+  creditHistory,
 } from '@/lib/db/schema'
 import { requireOrgAuth } from '@/lib/auth'
 import { eq, and, sql, inArray } from 'drizzle-orm'
@@ -465,6 +466,26 @@ export async function POST(req: Request) {
           updatedAt: new Date(),
         })
         .where(and(eq(organizationMembers.orgId, orgId), eq(organizationMembers.userId, userId)))
+
+      // Log to creditHistory for enrichment credit usage
+      const updatedCredits = await db.query.creditUsage.findFirst({
+        where: eq(creditUsage.orgId, orgId),
+      })
+      await db.insert(creditHistory).values({
+        orgId,
+        userId,
+        creditType: 'enrichment',
+        transactionType: 'leads_company_enrich',
+        creditsUsed: totalCreditsUsed,
+        balanceAfter: updatedCredits ? updatedCredits.enrichmentLimit - updatedCredits.enrichmentUsed : null,
+        description: `Enrichment credit usage for leads/company enrich`,
+        searchId: searchId || null,
+        companyId: null,
+        metadata: {
+          filters: filters ? { ...filters } : undefined,
+          // Removed 'companies' property to match schema
+        },
+      })
     }
 
     // Log transaction

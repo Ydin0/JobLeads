@@ -7,10 +7,12 @@ import {
   organizationMembers,
   enrichmentTransactions,
   searches,
+  creditHistory,
 } from '@/lib/db/schema'
 import { requireOrgAuth } from '@/lib/auth'
 import { eq, and, sql, inArray } from 'drizzle-orm'
 import { getOrFetchEmployees, type EnrichmentFilters } from '@/lib/employee-cache'
+import { bulkEnrichPeople } from '@/lib/apollo'
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -151,6 +153,7 @@ export async function POST(req: Request, { params }: RouteContext) {
 
     const results: QuickEnrichResult[] = []
     const errors: string[] = []
+    const allApolloIds: string[] = [] // Collect Apollo IDs for phone reveal
 
     // Process each company
     for (const company of companiesWithDomains) {
@@ -230,6 +233,10 @@ export async function POST(req: Request, { params }: RouteContext) {
 
             employeesCreated++
             globalEmployeeIds.push(globalEmployee.id)
+            // Track Apollo ID for phone reveal
+            if (globalEmployee.apolloId) {
+              allApolloIds.push(globalEmployee.apolloId)
+            }
           } catch (err) {
             // Ignore duplicate errors
           }
@@ -297,6 +304,26 @@ export async function POST(req: Request, { params }: RouteContext) {
           updatedAt: new Date(),
         })
         .where(and(eq(organizationMembers.orgId, orgId), eq(organizationMembers.userId, userId)))
+
+      // Log to creditHistory for enrichment credit usage
+      const updatedCredits = await db.query.creditUsage.findFirst({
+        where: eq(creditUsage.orgId, orgId),
+      })
+      await db.insert(creditHistory).values({
+        orgId,
+        userId,
+        creditType: 'enrichment',
+        transactionType: 'icp_quick_enrich',
+        creditsUsed: totalCreditsUsed,
+        balanceAfter: updatedCredits ? updatedCredits.enrichmentLimit - updatedCredits.enrichmentUsed : null,
+        description: `Enrichment credit usage for ICP quick enrich` ,
+        searchId: icpId,
+        companyId: null,
+        metadata: {
+          filters: filters ? { ...filters } : undefined,
+          companiesReturned: companiesWithDomains.length,
+        },
+      })
     }
 
     // Log bulk transaction
@@ -310,7 +337,7 @@ export async function POST(req: Request, { params }: RouteContext) {
       cacheHit: cacheHits > apolloFetches,
       apolloCallsMade: apolloFetches,
       metadata: {
-        filters,
+        filters: filters ? { ...filters } : undefined,
         fetchAll,
       },
     })
@@ -334,8 +361,36 @@ export async function POST(req: Request, { params }: RouteContext) {
         .where(eq(searches.id, icpId))
     }
 
+    // Request phone numbers via bulk_match with webhook
+    let phoneRevealRequested = false
+    if (allApolloIds.length > 0) {
+      const webhookUrl = process.env.APOLLO_WEBHOOK_URL || process.env.NEXT_PUBLIC_APP_URL
+      if (webhookUrl) {
+        const fullWebhookUrl = webhookUrl.includes('/api/webhooks/apollo/phones')
+          ? webhookUrl
+          : `${webhookUrl}/api/webhooks/apollo/phones`
+
+        console.log(`[Quick Enrich] Requesting phone reveal for ${allApolloIds.length} employees via webhook: ${fullWebhookUrl}`)
+
+        try {
+          await bulkEnrichPeople({
+            apolloIds: allApolloIds,
+            revealPhoneNumber: true,
+            webhookUrl: fullWebhookUrl,
+          })
+          phoneRevealRequested = true
+          console.log(`[Quick Enrich] Phone reveal requested for ${allApolloIds.length} employees`)
+        } catch (phoneError) {
+          console.error('[Quick Enrich] Failed to request phone reveal:', phoneError)
+          // Continue without phone reveal - not a critical error
+        }
+      } else {
+        console.warn('[Quick Enrich] No webhook URL configured - skipping phone reveal. Set APOLLO_WEBHOOK_URL or NEXT_PUBLIC_APP_URL')
+      }
+    }
+
     console.log(
-      `[Quick Enrich] Completed: ${totalEmployeesCreated} employees, ${totalCreditsUsed} credits, ${cacheHits} cache hits, ${apolloFetches} Apollo fetches`
+      `[Quick Enrich] Completed: ${totalEmployeesCreated} employees, ${totalCreditsUsed} credits, ${cacheHits} cache hits, ${apolloFetches} Apollo fetches, phoneReveal: ${phoneRevealRequested}`
     )
 
     return NextResponse.json({
@@ -347,6 +402,7 @@ export async function POST(req: Request, { params }: RouteContext) {
       totalCreditsUsed,
       cacheHits,
       apolloFetches,
+      phoneRevealRequested,
       results,
       errors: errors.length > 0 ? errors : undefined,
       skippedCompanies:

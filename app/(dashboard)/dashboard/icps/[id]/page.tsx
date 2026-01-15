@@ -176,12 +176,14 @@ export default function ICPDetailPage() {
     // Company filter state (arrays for multi-select)
     const [sizeFilter, setSizeFilter] = useState<string[]>([])
     const [industryFilter, setIndustryFilter] = useState<string[]>([])
+    const [countryFilter, setCountryFilter] = useState<string[]>([])
     const [locationFilter, setLocationFilter] = useState<string[]>([])
     const [filterOptions, setFilterOptions] = useState<{
         sizes: string[]
         industries: string[]
+        countries: string[]
         locations: string[]
-    }>({ sizes: [], industries: [], locations: [] })
+    }>({ sizes: [], industries: [], countries: [], locations: [] })
     const [overallStats, setOverallStats] = useState<{
         totalCompanies: number
         enrichedCompanies: number
@@ -313,6 +315,7 @@ export default function ICPDetailPage() {
             // Add filter params if active (pipe-separated for multi-select to handle values with commas)
             if (sizeFilter.length > 0) params.append('size', sizeFilter.join('|'))
             if (industryFilter.length > 0) params.append('industry', industryFilter.join('|'))
+            if (countryFilter.length > 0) params.append('country', countryFilter.join('|'))
             if (locationFilter.length > 0) params.append('location', locationFilter.join('|'))
 
             const companiesResponse = await fetch(`/api/companies?${params}`)
@@ -333,7 +336,7 @@ export default function ICPDetailPage() {
         } catch (err) {
             console.error('Error fetching companies:', err)
         }
-    }, [icpId, sizeFilter, industryFilter, locationFilter])
+    }, [icpId, sizeFilter, industryFilter, countryFilter, locationFilter])
 
     const fetchData = useCallback(async () => {
         await fetchIcpData()
@@ -351,7 +354,7 @@ export default function ICPDetailPage() {
     // Reset to page 1 when filters change
     useEffect(() => {
         setPage(1)
-    }, [sizeFilter, industryFilter, locationFilter])
+    }, [sizeFilter, industryFilter, countryFilter, locationFilter])
 
     // Run all scrapers
     const handleRunScrapers = async () => {
@@ -1289,6 +1292,16 @@ export default function ICPDetailPage() {
                             emptyText="No industries found."
                         />
 
+                        {/* Country Filter */}
+                        <MultiSelectFilter
+                            options={filterOptions.countries}
+                            selectedValues={countryFilter}
+                            onChange={setCountryFilter}
+                            placeholder="Country"
+                            searchPlaceholder="Search countries..."
+                            emptyText="No countries found."
+                        />
+
                         {/* Location Filter */}
                         <MultiSelectFilter
                             options={filterOptions.locations}
@@ -1304,7 +1317,7 @@ export default function ICPDetailPage() {
 
                         {/* Results count */}
                         <span className="text-sm text-black/40 dark:text-white/40">
-                            {totalCount} {sizeFilter.length > 0 || industryFilter.length > 0 || locationFilter.length > 0 ? 'matching' : ''} companies
+                            {totalCount} {sizeFilter.length > 0 || industryFilter.length > 0 || countryFilter.length > 0 || locationFilter.length > 0 ? 'matching' : ''} companies
                         </span>
 
                         {/* Selection actions */}
@@ -1323,7 +1336,7 @@ export default function ICPDetailPage() {
                     </div>
 
                     {/* Selected filters chips row */}
-                    {(sizeFilter.length > 0 || industryFilter.length > 0 || locationFilter.length > 0) && (
+                    {(sizeFilter.length > 0 || industryFilter.length > 0 || countryFilter.length > 0 || locationFilter.length > 0) && (
                         <div className="flex flex-wrap items-center gap-2">
                             {sizeFilter.map((size) => (
                                 <span
@@ -1353,6 +1366,20 @@ export default function ICPDetailPage() {
                                     </button>
                                 </span>
                             ))}
+                            {countryFilter.map((country) => (
+                                <span
+                                    key={`country-${country}`}
+                                    className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-600 dark:bg-orange-500/10 dark:text-orange-400"
+                                >
+                                    {country}
+                                    <button
+                                        onClick={() => setCountryFilter(countryFilter.filter(c => c !== country))}
+                                        className="ml-0.5 rounded-full p-0.5 transition-colors hover:bg-orange-100 dark:hover:bg-orange-500/20"
+                                    >
+                                        <X className="size-3" />
+                                    </button>
+                                </span>
+                            ))}
                             {locationFilter.map((location) => (
                                 <span
                                     key={`location-${location}`}
@@ -1371,6 +1398,7 @@ export default function ICPDetailPage() {
                                 onClick={() => {
                                     setSizeFilter([])
                                     setIndustryFilter([])
+                                    setCountryFilter([])
                                     setLocationFilter([])
                                 }}
                                 className="text-xs text-black/50 hover:text-black dark:text-white/50 dark:hover:text-white"
