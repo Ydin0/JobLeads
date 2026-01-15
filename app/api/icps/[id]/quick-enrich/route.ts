@@ -3,7 +3,8 @@ import { db } from '@/lib/db'
 import {
   companies,
   employees,
-  organizations,
+  creditUsage,
+  organizationMembers,
   enrichmentTransactions,
   searches,
 } from '@/lib/db/schema'
@@ -84,16 +85,64 @@ export async function POST(req: Request, { params }: RouteContext) {
       `[Quick Enrich] Processing ${companiesWithDomains.length} companies with domains, ${companiesWithoutDomains.length} without (fetchAll: ${fetchAll})`
     )
 
-    // Get org credit info
-    const org = await db.query.organizations.findFirst({
-      where: eq(organizations.id, orgId),
+    // Get or create org credit usage record
+    let credits = await db.query.creditUsage.findFirst({
+      where: eq(creditUsage.orgId, orgId),
     })
 
-    if (!org) {
-      return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
+    if (!credits) {
+      const now = new Date()
+      const cycleEnd = new Date(now)
+      cycleEnd.setMonth(cycleEnd.getMonth() + 1)
+
+      const [newCredits] = await db
+        .insert(creditUsage)
+        .values({
+          orgId,
+          enrichmentLimit: 200,
+          icpLimit: 1000,
+          enrichmentUsed: 0,
+          icpUsed: 0,
+          billingCycleStart: now,
+          billingCycleEnd: cycleEnd,
+          planId: 'free',
+        })
+        .returning()
+
+      credits = newCredits
     }
 
-    let creditsRemaining = (org.creditsLimit || 30) - (org.creditsUsed || 0)
+    // Check if billing cycle has ended and reset if needed
+    const now = new Date()
+    if (credits.billingCycleEnd && new Date(credits.billingCycleEnd) < now) {
+      const cycleEnd = new Date(now)
+      cycleEnd.setMonth(cycleEnd.getMonth() + 1)
+
+      const [updatedCredits] = await db
+        .update(creditUsage)
+        .set({
+          enrichmentUsed: 0,
+          icpUsed: 0,
+          billingCycleStart: now,
+          billingCycleEnd: cycleEnd,
+          updatedAt: now,
+        })
+        .where(eq(creditUsage.orgId, orgId))
+        .returning()
+
+      credits = updatedCredits
+
+      await db
+        .update(organizationMembers)
+        .set({
+          enrichmentUsed: 0,
+          icpUsed: 0,
+          updatedAt: now,
+        })
+        .where(eq(organizationMembers.orgId, orgId))
+    }
+
+    let creditsRemaining = credits.enrichmentLimit - credits.enrichmentUsed
     let totalCreditsUsed = 0
     let totalEmployeesFound = 0
     let totalEmployeesCreated = 0
@@ -231,15 +280,23 @@ export async function POST(req: Request, { params }: RouteContext) {
       }
     }
 
-    // Update org credits in one operation
+    // Update org and member credits in one operation
     if (totalCreditsUsed > 0) {
       await db
-        .update(organizations)
+        .update(creditUsage)
         .set({
-          creditsUsed: sql`${organizations.creditsUsed} + ${totalCreditsUsed}`,
+          enrichmentUsed: sql`${creditUsage.enrichmentUsed} + ${totalCreditsUsed}`,
           updatedAt: new Date(),
         })
-        .where(eq(organizations.id, orgId))
+        .where(eq(creditUsage.orgId, orgId))
+
+      await db
+        .update(organizationMembers)
+        .set({
+          enrichmentUsed: sql`${organizationMembers.enrichmentUsed} + ${totalCreditsUsed}`,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(organizationMembers.orgId, orgId), eq(organizationMembers.userId, userId)))
     }
 
     // Log bulk transaction
@@ -354,9 +411,9 @@ export async function GET(req: Request, { params }: RouteContext) {
       }
     }
 
-    // Get org credit info
-    const org = await db.query.organizations.findFirst({
-      where: eq(organizations.id, orgId),
+    // Get org credit info from creditUsage table
+    const credits = await db.query.creditUsage.findFirst({
+      where: eq(creditUsage.orgId, orgId),
     })
 
     // Get saved enrichment filters
@@ -367,6 +424,10 @@ export async function GET(req: Request, { params }: RouteContext) {
           lastUsedAt?: string
         }
       | undefined
+
+    const creditsRemaining = credits 
+      ? credits.enrichmentLimit - credits.enrichmentUsed 
+      : 200 // Default free plan limit
 
     return NextResponse.json({
       icpName: icp.name,
@@ -380,7 +441,7 @@ export async function GET(req: Request, { params }: RouteContext) {
         companiesInCache,
         estimatedEmployeesInCache: totalCachedEmployees,
       },
-      creditsRemaining: (org?.creditsLimit || 30) - (org?.creditsUsed || 0),
+      creditsRemaining,
       savedFilters: savedFilters || null,
     })
   } catch (error) {

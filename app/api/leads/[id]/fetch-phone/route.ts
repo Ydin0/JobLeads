@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { leads, organizations } from '@/lib/db/schema'
-import { requireOrgAuth } from '@/lib/auth'
+import { leads, creditUsage, organizationMembers } from '@/lib/db/schema'
+import { requireOrgAuth, checkMemberCredits } from '@/lib/auth'
 import { eq, and, sql } from 'drizzle-orm'
 import { bulkEnrichPeople } from '@/lib/apollo'
 
@@ -11,7 +11,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { orgId } = await requireOrgAuth()
+    const { orgId, userId } = await requireOrgAuth()
     const { id: leadId } = await params
 
     // Get the lead
@@ -43,36 +43,65 @@ export async function POST(
       )
     }
 
-    // Get org to check credits
-    const org = await db.query.organizations.findFirst({
-      where: eq(organizations.id, orgId),
-    })
-
-    if (!org) {
-      return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
+    // Check member-level limits first
+    const memberCheck = await checkMemberCredits(userId, orgId, 'enrichment', 1)
+    if (!memberCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: memberCheck.reason,
+          remaining: memberCheck.remaining,
+          limitType: 'member',
+        },
+        { status: 402 }
+      )
     }
 
-    const creditsRemaining = (org.creditsLimit || 30) - (org.creditsUsed || 0)
+    // Get or create org credit usage record
+    let credits = await db.query.creditUsage.findFirst({
+      where: eq(creditUsage.orgId, orgId),
+    })
+
+    if (!credits) {
+      const now = new Date()
+      const cycleEnd = new Date(now)
+      cycleEnd.setMonth(cycleEnd.getMonth() + 1)
+
+      const [newCredits] = await db
+        .insert(creditUsage)
+        .values({
+          orgId,
+          enrichmentLimit: 200,
+          icpLimit: 1000,
+          enrichmentUsed: 0,
+          icpUsed: 0,
+          billingCycleStart: now,
+          billingCycleEnd: cycleEnd,
+          planId: 'free',
+        })
+        .returning()
+
+      credits = newCredits
+    }
+
+    // Check org-level credits
+    const creditsRemaining = credits.enrichmentLimit - credits.enrichmentUsed
     if (creditsRemaining < 1) {
       return NextResponse.json(
-        { error: 'Insufficient credits for phone lookup' },
+        { error: 'Insufficient credits for phone lookup', remaining: creditsRemaining },
         { status: 402 }
       )
     }
 
     console.log(`[Fetch Phone] Looking up phone for lead ${leadId} (Apollo ID: ${apolloId})`)
 
-    // Get the webhook URL for phone enrichment
+    // Get the webhook URL for phone enrichment (optional - phone may be returned immediately)
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
     const webhookUrl = baseUrl
       ? `${baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`}/api/webhooks/apollo/phones`
       : undefined
 
     if (!webhookUrl) {
-      return NextResponse.json(
-        { error: 'Webhook URL not configured' },
-        { status: 500 }
-      )
+      console.log('[Fetch Phone] No webhook URL configured - phone lookup will only work if returned immediately')
     }
 
     // Call Apollo to get phone number
@@ -100,14 +129,22 @@ export async function POST(
         })
         .where(eq(leads.id, leadId))
 
-      // Update org credits
+      // Update org and member credits
       await db
-        .update(organizations)
+        .update(creditUsage)
         .set({
-          creditsUsed: sql`${organizations.creditsUsed} + 1`,
+          enrichmentUsed: sql`${creditUsage.enrichmentUsed} + 1`,
           updatedAt: new Date(),
         })
-        .where(eq(organizations.id, orgId))
+        .where(eq(creditUsage.orgId, orgId))
+
+      await db
+        .update(organizationMembers)
+        .set({
+          enrichmentUsed: sql`${organizationMembers.enrichmentUsed} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(organizationMembers.orgId, orgId), eq(organizationMembers.userId, userId)))
 
       console.log(`[Fetch Phone] Phone found immediately: ${enrichedPerson.phone}`)
 
@@ -130,14 +167,22 @@ export async function POST(
         })
         .where(eq(leads.id, leadId))
 
-      // Update org credits (charged regardless of immediate result)
+      // Update org and member credits (charged regardless of immediate result)
       await db
-        .update(organizations)
+        .update(creditUsage)
         .set({
-          creditsUsed: sql`${organizations.creditsUsed} + 1`,
+          enrichmentUsed: sql`${creditUsage.enrichmentUsed} + 1`,
           updatedAt: new Date(),
         })
-        .where(eq(organizations.id, orgId))
+        .where(eq(creditUsage.orgId, orgId))
+
+      await db
+        .update(organizationMembers)
+        .set({
+          enrichmentUsed: sql`${organizationMembers.enrichmentUsed} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(organizationMembers.orgId, orgId), eq(organizationMembers.userId, userId)))
 
       console.log(`[Fetch Phone] Phone will be delivered via webhook`)
 
