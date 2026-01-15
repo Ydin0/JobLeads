@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { companies, employees, creditUsage, enrichmentTransactions, searches, organizationMembers } from '@/lib/db/schema'
+import { companies, employees, creditUsage, enrichmentTransactions, searches, organizationMembers, creditHistory } from '@/lib/db/schema'
 import { requireOrgAuth, checkMemberCredits } from '@/lib/auth'
 import { eq, and, sql } from 'drizzle-orm'
 import { getOrFetchEmployees, type EnrichmentFilters } from '@/lib/employee-cache'
@@ -219,6 +219,27 @@ export async function POST(req: Request, { params }: RouteContext) {
         sourceCompanyDomain: domain,
         globalEmployeeIds,
       },
+    })
+
+    // Log to creditHistory for enrichment credit usage
+    const updatedCredits = await db.query.creditUsage.findFirst({
+      where: eq(creditUsage.orgId, orgId),
+    })
+    await db.insert(creditHistory).values({
+      orgId,
+      userId,
+      creditType: 'enrichment',
+      transactionType: 'company_enrich',
+      creditsUsed: employeesCreated,
+      balanceAfter: updatedCredits ? updatedCredits.enrichmentLimit - updatedCredits.enrichmentUsed : null,
+      description: `Enrichment credit usage for company ${company.name}`,
+      searchId: icpId || company.searchId || null,
+      companyId: id,
+      metadata: {
+        filters: filters ? { ...filters } : {},
+        sourceCompanyDomain: domain,
+        globalEmployeeIds,
+      } as Record<string, unknown>,
     })
 
     // Save filters to ICP if requested

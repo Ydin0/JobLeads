@@ -4,6 +4,77 @@ import { companies, employees } from "@/lib/db/schema";
 import { requireOrgAuth } from "@/lib/auth";
 import { eq, sql } from "drizzle-orm";
 
+// Country code to name mapping
+const CODE_TO_COUNTRY: Record<string, string> = {
+  'US': 'United States', 'USA': 'United States',
+  'GB': 'United Kingdom', 'UK': 'United Kingdom',
+  'CA': 'Canada',
+  'DE': 'Germany',
+  'FR': 'France',
+  'NL': 'Netherlands',
+  'AU': 'Australia',
+  'SG': 'Singapore',
+  'JP': 'Japan',
+  'IN': 'India',
+  'BR': 'Brazil',
+  'MX': 'Mexico',
+  'ES': 'Spain',
+  'IT': 'Italy',
+  'CH': 'Switzerland',
+  'SE': 'Sweden',
+  'DK': 'Denmark',
+  'NO': 'Norway',
+  'FI': 'Finland',
+  'IE': 'Ireland',
+  'BE': 'Belgium',
+  'AT': 'Austria',
+  'PL': 'Poland',
+  'PT': 'Portugal',
+  'CZ': 'Czech Republic',
+  'IL': 'Israel',
+  'AE': 'United Arab Emirates', 'UAE': 'United Arab Emirates',
+  'ZA': 'South Africa',
+  'NZ': 'New Zealand',
+  'KR': 'South Korea',
+  'CN': 'China',
+  'HK': 'Hong Kong',
+  'TW': 'Taiwan',
+  'ID': 'Indonesia',
+  'PH': 'Philippines',
+  'VN': 'Vietnam',
+  'TH': 'Thailand',
+  'MY': 'Malaysia',
+  'AR': 'Argentina',
+  'CO': 'Colombia',
+  'CL': 'Chile',
+  'PE': 'Peru',
+  'EG': 'Egypt',
+  'NG': 'Nigeria',
+  'KE': 'Kenya',
+  'SA': 'Saudi Arabia',
+  'CR': 'Costa Rica',
+};
+
+// Extract country from location string (e.g., "Bristol, GB" -> "United Kingdom")
+function extractCountryFromLocation(location: string): string | null {
+  const parts = location.split(/[,\s]+/);
+  const lastPart = parts[parts.length - 1]?.trim().toUpperCase();
+
+  if (lastPart && CODE_TO_COUNTRY[lastPart]) {
+    return CODE_TO_COUNTRY[lastPart];
+  }
+
+  // Check for full country names
+  const locationUpper = location.toUpperCase();
+  for (const country of Object.values(CODE_TO_COUNTRY)) {
+    if (locationUpper.includes(country.toUpperCase())) {
+      return country;
+    }
+  }
+
+  return null;
+}
+
 // GET /api/prospects/filters - Get distinct filter options
 export async function GET() {
   try {
@@ -96,12 +167,32 @@ export async function GET() {
       '5000+',
     ];
 
+    // Get distinct locations from companies to extract countries
+    const locationsResult = await db
+      .select({
+        location: companies.location,
+      })
+      .from(companies)
+      .where(eq(companies.orgId, orgId))
+      .groupBy(companies.location);
+
+    const extractedCountries = new Set<string>();
+    for (const row of locationsResult) {
+      if (row.location) {
+        const country = extractCountryFromLocation(row.location);
+        if (country) {
+          extractedCountries.add(country);
+        }
+      }
+    }
+
     return NextResponse.json({
       jobTitles,
       seniorities,
       departments,
       industries,
       sizes,
+      countries: Array.from(extractedCountries).sort(),
       companies: companyOptions,
     });
   } catch (error) {

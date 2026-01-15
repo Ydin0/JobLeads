@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { leads } from "@/lib/db/schema";
-import { sql } from "drizzle-orm";
+import { leads, employees, globalEmployees } from "@/lib/db/schema";
+import { sql, eq } from "drizzle-orm";
 
 // POST /api/webhooks/apollo/phones - Receive phone numbers from Apollo
 // Apollo sends phone data asynchronously after bulk_match with reveal_phone_number=true
@@ -25,7 +25,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, message: "No data to process" });
     }
 
-    let updated = 0;
+    let leadsUpdated = 0;
+    let employeesUpdated = 0;
+    let globalEmployeesUpdated = 0;
     let errors = 0;
 
     for (const person of people) {
@@ -45,15 +47,56 @@ export async function POST(req: Request) {
         || null;
 
       const hasPhone = !!primaryPhone;
-      console.log("[Apollo Webhook] Updating lead with Apollo ID:", apolloId, "phone:", primaryPhone || "not found");
+      console.log("[Apollo Webhook] Processing Apollo ID:", apolloId, "phone:", primaryPhone || "not found");
+
+      const now = new Date();
 
       try {
-        // Find and update leads with this Apollo ID in their metadata
-        // Using raw SQL to query JSONB field
-        // Set phonePending to false and update phone number (if found)
-        const now = new Date();
+        // 1. Update globalEmployees (by apolloId column)
+        const globalResult = await db
+          .update(globalEmployees)
+          .set({
+            ...(hasPhone ? { phone: primaryPhone } : {}),
+            metadata: sql`jsonb_set(COALESCE(${globalEmployees.metadata}, '{}'), '{phoneUpdatedAt}', ${JSON.stringify(now.toISOString())}::jsonb)`,
+            updatedAt: now,
+          })
+          .where(eq(globalEmployees.apolloId, apolloId))
+          .returning();
+
+        if (globalResult.length > 0) {
+          globalEmployeesUpdated += globalResult.length;
+          console.log("[Apollo Webhook] Updated", globalResult.length, "global employee(s)");
+        }
+      } catch (err) {
+        console.error("[Apollo Webhook] Error updating global employee:", err);
+        errors++;
+      }
+
+      try {
+        // 2. Update employees (by apolloId column)
+        const employeeResult = await db
+          .update(employees)
+          .set({
+            ...(hasPhone ? { phone: primaryPhone } : {}),
+            metadata: sql`jsonb_set(COALESCE(${employees.metadata}, '{}'), '{phoneUpdatedAt}', ${JSON.stringify(now.toISOString())}::jsonb)`,
+            updatedAt: now,
+          })
+          .where(eq(employees.apolloId, apolloId))
+          .returning();
+
+        if (employeeResult.length > 0) {
+          employeesUpdated += employeeResult.length;
+          console.log("[Apollo Webhook] Updated", employeeResult.length, "employee(s)");
+        }
+      } catch (err) {
+        console.error("[Apollo Webhook] Error updating employee:", err);
+        errors++;
+      }
+
+      try {
+        // 3. Update leads (apolloId in metadata JSONB)
         const phoneUpdatedAt = JSON.stringify(now.toISOString());
-        const result = await db
+        const leadsResult = await db
           .update(leads)
           .set({
             ...(hasPhone ? { phone: primaryPhone } : {}),
@@ -65,11 +108,9 @@ export async function POST(req: Request) {
           .where(sql`${leads.metadata}->>'apolloId' = ${apolloId}`)
           .returning();
 
-        if (result.length > 0) {
-          updated += result.length;
-          console.log("[Apollo Webhook] Updated", result.length, "lead(s) for Apollo ID:", apolloId);
-        } else {
-          console.log("[Apollo Webhook] No lead found with Apollo ID:", apolloId);
+        if (leadsResult.length > 0) {
+          leadsUpdated += leadsResult.length;
+          console.log("[Apollo Webhook] Updated", leadsResult.length, "lead(s)");
         }
       } catch (err) {
         console.error("[Apollo Webhook] Error updating lead:", err);
@@ -77,11 +118,13 @@ export async function POST(req: Request) {
       }
     }
 
-    console.log("[Apollo Webhook] Complete - Updated:", updated, "Errors:", errors);
+    console.log("[Apollo Webhook] Complete - GlobalEmployees:", globalEmployeesUpdated, "Employees:", employeesUpdated, "Leads:", leadsUpdated, "Errors:", errors);
 
     return NextResponse.json({
       success: true,
-      updated,
+      globalEmployeesUpdated,
+      employeesUpdated,
+      leadsUpdated,
       errors,
     });
   } catch (error) {
