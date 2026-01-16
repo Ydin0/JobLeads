@@ -4,6 +4,57 @@ import { companies, employees, jobs } from "@/lib/db/schema";
 import { requireOrgAuth } from "@/lib/auth";
 import { eq, and, sql, desc, ilike, inArray } from "drizzle-orm";
 
+// Country name to variations mapping for filtering
+const COUNTRY_MAPPINGS: Record<string, string[]> = {
+  'United States': ['United States', 'USA', 'US', 'U.S.', 'U.S.A.', 'America'],
+  'United Kingdom': ['United Kingdom', 'UK', 'GB', 'Britain', 'England', 'Scotland', 'Wales'],
+  'Canada': ['Canada', 'CA'],
+  'Germany': ['Germany', 'DE', 'Deutschland'],
+  'France': ['France', 'FR'],
+  'Netherlands': ['Netherlands', 'NL', 'Holland'],
+  'Australia': ['Australia', 'AU'],
+  'Singapore': ['Singapore', 'SG'],
+  'Japan': ['Japan', 'JP'],
+  'India': ['India', 'IN'],
+  'Brazil': ['Brazil', 'BR', 'Brasil'],
+  'Mexico': ['Mexico', 'MX', 'México'],
+  'Spain': ['Spain', 'ES', 'España'],
+  'Italy': ['Italy', 'IT', 'Italia'],
+  'Switzerland': ['Switzerland', 'CH', 'Schweiz', 'Suisse'],
+  'Sweden': ['Sweden', 'SE'],
+  'Denmark': ['Denmark', 'DK'],
+  'Norway': ['Norway', 'NO'],
+  'Finland': ['Finland', 'FI'],
+  'Ireland': ['Ireland', 'IE'],
+  'Belgium': ['Belgium', 'BE'],
+  'Austria': ['Austria', 'AT'],
+  'Poland': ['Poland', 'PL'],
+  'Portugal': ['Portugal', 'PT'],
+  'Czech Republic': ['Czech Republic', 'CZ', 'Czechia'],
+  'Israel': ['Israel', 'IL'],
+  'United Arab Emirates': ['United Arab Emirates', 'UAE', 'AE', 'Dubai', 'Abu Dhabi'],
+  'South Africa': ['South Africa', 'ZA'],
+  'New Zealand': ['New Zealand', 'NZ'],
+  'South Korea': ['South Korea', 'KR', 'Korea'],
+  'China': ['China', 'CN'],
+  'Hong Kong': ['Hong Kong', 'HK'],
+  'Taiwan': ['Taiwan', 'TW'],
+  'Indonesia': ['Indonesia', 'ID'],
+  'Philippines': ['Philippines', 'PH'],
+  'Vietnam': ['Vietnam', 'VN'],
+  'Thailand': ['Thailand', 'TH'],
+  'Malaysia': ['Malaysia', 'MY'],
+  'Argentina': ['Argentina', 'AR'],
+  'Colombia': ['Colombia', 'CO'],
+  'Chile': ['Chile', 'CL'],
+  'Peru': ['Peru', 'PE'],
+  'Egypt': ['Egypt', 'EG'],
+  'Nigeria': ['Nigeria', 'NG'],
+  'Kenya': ['Kenya', 'KE'],
+  'Saudi Arabia': ['Saudi Arabia', 'SA'],
+  'Costa Rica': ['Costa Rica', 'CR'],
+};
+
 // GET /api/prospects - Unified endpoint for people and companies
 export async function GET(req: Request) {
   try {
@@ -48,6 +99,7 @@ async function getPeopleProspects(
     departments?: string[];
     companyIds?: string[];
     locations?: string[];
+    countries?: string[];
     isShortlisted?: boolean;
   }
 ) {
@@ -95,6 +147,28 @@ async function getPeopleProspects(
       (loc) => ilike(employees.location, `%${loc}%`)
     );
     conditions.push(sql`(${sql.join(locationConditions, sql` OR `)})`);
+  }
+
+  // Country filter - expand to all variations
+  if (filters.countries && filters.countries.length > 0) {
+    const allVariations: string[] = [];
+    for (const country of filters.countries) {
+      const variations = COUNTRY_MAPPINGS[country] || [country];
+      allVariations.push(...variations);
+    }
+    const countryConditions = allVariations.flatMap((variation) => {
+      if (variation.length <= 3) {
+        // Short code: match at end after comma/space
+        return [
+          ilike(employees.location, `%, ${variation}`),
+          ilike(employees.location, `% ${variation}`),
+        ];
+      }
+      return [ilike(employees.location, `%${variation}%`)];
+    });
+    if (countryConditions.length > 0) {
+      conditions.push(sql`(${sql.join(countryConditions, sql` OR `)})`);
+    }
   }
 
   // Lead status filter
@@ -178,6 +252,7 @@ async function getCompanyProspects(
     industries?: string[];
     sizes?: string[];
     locations?: string[];
+    countries?: string[];
     isEnriched?: boolean;
     hasContacts?: boolean;
   }
@@ -212,6 +287,28 @@ async function getCompanyProspects(
       (loc) => ilike(companies.location, `%${loc}%`)
     );
     conditions.push(sql`(${sql.join(locationConditions, sql` OR `)})`);
+  }
+
+  // Country filter - expand to all variations
+  if (filters.countries && filters.countries.length > 0) {
+    const allVariations: string[] = [];
+    for (const country of filters.countries) {
+      const variations = COUNTRY_MAPPINGS[country] || [country];
+      allVariations.push(...variations);
+    }
+    const countryConditions = allVariations.flatMap((variation) => {
+      if (variation.length <= 3) {
+        // Short code: match at end after comma/space
+        return [
+          ilike(companies.location, `%, ${variation}`),
+          ilike(companies.location, `% ${variation}`),
+        ];
+      }
+      return [ilike(companies.location, `%${variation}%`)];
+    });
+    if (countryConditions.length > 0) {
+      conditions.push(sql`(${sql.join(countryConditions, sql` OR `)})`);
+    }
   }
 
   // Enrichment status filter

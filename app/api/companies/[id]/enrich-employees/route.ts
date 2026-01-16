@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { companies, employees, organizations, enrichmentTransactions, searches } from '@/lib/db/schema'
-import { requireOrgAuth } from '@/lib/auth'
+import { companies, employees, creditUsage, enrichmentTransactions, searches, organizationMembers, creditHistory } from '@/lib/db/schema'
+import { requireOrgAuth, checkMemberCredits } from '@/lib/auth'
 import { eq, and, sql } from 'drizzle-orm'
 import { getOrFetchEmployees, type EnrichmentFilters } from '@/lib/employee-cache'
 
@@ -61,22 +61,87 @@ export async function POST(req: Request, { params }: RouteContext) {
     // Calculate credits (1 credit per employee copied to org)
     const creditsToUse = globalEmployeesResult.length
 
-    // Check org has enough credits
-    const org = await db.query.organizations.findFirst({
-      where: eq(organizations.id, orgId),
-    })
-
-    if (!org) {
-      return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
+    // Check member-level limits first
+    const memberCheck = await checkMemberCredits(userId, orgId, 'enrichment', creditsToUse)
+    if (!memberCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: memberCheck.reason,
+          creditsRequired: creditsToUse,
+          creditsRemaining: memberCheck.remaining,
+          limitType: 'member',
+        },
+        { status: 402 }
+      )
     }
 
-    const creditsRemaining = (org.creditsLimit || 30) - (org.creditsUsed || 0)
+    // Get or create org credit usage record
+    let credits = await db.query.creditUsage.findFirst({
+      where: eq(creditUsage.orgId, orgId),
+    })
+
+    if (!credits) {
+      const now = new Date()
+      const cycleEnd = new Date(now)
+      cycleEnd.setMonth(cycleEnd.getMonth() + 1)
+
+      const [newCredits] = await db
+        .insert(creditUsage)
+        .values({
+          orgId,
+          enrichmentLimit: 200,
+          icpLimit: 1000,
+          enrichmentUsed: 0,
+          icpUsed: 0,
+          billingCycleStart: now,
+          billingCycleEnd: cycleEnd,
+          planId: 'free',
+        })
+        .returning()
+
+      credits = newCredits
+    }
+
+    // Check if billing cycle has ended and reset if needed
+    const now = new Date()
+    if (credits.billingCycleEnd && new Date(credits.billingCycleEnd) < now) {
+      const cycleEnd = new Date(now)
+      cycleEnd.setMonth(cycleEnd.getMonth() + 1)
+
+      const [updatedCredits] = await db
+        .update(creditUsage)
+        .set({
+          enrichmentUsed: 0,
+          icpUsed: 0,
+          billingCycleStart: now,
+          billingCycleEnd: cycleEnd,
+          updatedAt: now,
+        })
+        .where(eq(creditUsage.orgId, orgId))
+        .returning()
+
+      credits = updatedCredits
+
+      // Also reset all member usage for this org
+      await db
+        .update(organizationMembers)
+        .set({
+          enrichmentUsed: 0,
+          icpUsed: 0,
+          updatedAt: now,
+        })
+        .where(eq(organizationMembers.orgId, orgId))
+    }
+
+    // Check org-level credits
+    const creditsRemaining = credits.enrichmentLimit - credits.enrichmentUsed
     if (creditsToUse > creditsRemaining) {
       return NextResponse.json(
         {
-          error: 'Insufficient credits',
+          error: 'Insufficient enrichment credits',
           creditsRequired: creditsToUse,
           creditsRemaining,
+          limitType: 'organization',
         },
         { status: 402 }
       )
@@ -121,14 +186,22 @@ export async function POST(req: Request, { params }: RouteContext) {
       }
     }
 
-    // Deduct credits from org
+    // Deduct credits from org and member
     await db
-      .update(organizations)
+      .update(creditUsage)
       .set({
-        creditsUsed: sql`${organizations.creditsUsed} + ${employeesCreated}`,
+        enrichmentUsed: sql`${creditUsage.enrichmentUsed} + ${employeesCreated}`,
         updatedAt: new Date(),
       })
-      .where(eq(organizations.id, orgId))
+      .where(eq(creditUsage.orgId, orgId))
+
+    await db
+      .update(organizationMembers)
+      .set({
+        enrichmentUsed: sql`${organizationMembers.enrichmentUsed} + ${employeesCreated}`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(organizationMembers.orgId, orgId), eq(organizationMembers.userId, userId)))
 
     // Log the transaction
     await db.insert(enrichmentTransactions).values({
@@ -146,6 +219,27 @@ export async function POST(req: Request, { params }: RouteContext) {
         sourceCompanyDomain: domain,
         globalEmployeeIds,
       },
+    })
+
+    // Log to creditHistory for enrichment credit usage
+    const updatedCredits = await db.query.creditUsage.findFirst({
+      where: eq(creditUsage.orgId, orgId),
+    })
+    await db.insert(creditHistory).values({
+      orgId,
+      userId,
+      creditType: 'enrichment',
+      transactionType: 'company_enrich',
+      creditsUsed: employeesCreated,
+      balanceAfter: updatedCredits ? updatedCredits.enrichmentLimit - updatedCredits.enrichmentUsed : null,
+      description: `Enrichment credit usage for company ${company.name}`,
+      searchId: icpId || company.searchId || null,
+      companyId: id,
+      metadata: {
+        filters: filters ? { ...filters } : {},
+        sourceCompanyDomain: domain,
+        globalEmployeeIds,
+      } as Record<string, unknown>,
     })
 
     // Save filters to ICP if requested

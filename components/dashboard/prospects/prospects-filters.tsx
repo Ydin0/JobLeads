@@ -12,6 +12,7 @@ import {
   Users,
   GraduationCap,
   Check,
+  Globe,
 } from 'lucide-react'
 import type { ProspectFilters } from '@/hooks/use-prospects'
 
@@ -27,6 +28,7 @@ export interface FilterOptions {
   departments: string[]
   industries: string[]
   sizes: string[]
+  countries: string[]
   companies: { id: string; name: string }[]
 }
 
@@ -210,6 +212,21 @@ export function ProspectsFilters({
         {/* Companies-specific filters */}
         {view === 'companies' && (
           <>
+            {/* Company Size Filter */}
+            <FilterSection
+              title="Company Size"
+              icon={<Users className="size-3.5" />}
+              isExpanded={expandedSections.includes('size')}
+              onToggle={() => toggleSection('size')}
+              activeCount={filters.sizes?.length}
+            >
+              <CheckboxList
+                options={options.sizes.map((s) => ({ value: s, label: `${s} employees` }))}
+                selected={filters.sizes || []}
+                onToggle={(value) => toggleArrayFilter('sizes', value)}
+              />
+            </FilterSection>
+
             {/* Industry Filter */}
             <FilterSection
               title="Industry"
@@ -228,19 +245,71 @@ export function ProspectsFilters({
               />
             </FilterSection>
 
-            {/* Company Size Filter */}
+            {/* Country Filter */}
             <FilterSection
-              title="Company Size"
-              icon={<Users className="size-3.5" />}
-              isExpanded={expandedSections.includes('size')}
-              onToggle={() => toggleSection('size')}
-              activeCount={filters.sizes?.length}
+              title="Country"
+              icon={<Globe className="size-3.5" />}
+              isExpanded={expandedSections.includes('country')}
+              onToggle={() => toggleSection('country')}
+              activeCount={filters.countries?.length}
             >
-              <CheckboxList
-                options={options.sizes.map((s) => ({ value: s, label: `${s} employees` }))}
-                selected={filters.sizes || []}
-                onToggle={(value) => toggleArrayFilter('sizes', value)}
+              <SearchableCheckboxList
+                options={options.countries.map((c) => ({ value: c, label: c }))}
+                selected={filters.countries || []}
+                onToggle={(value) => toggleArrayFilter('countries', value)}
+                searchPlaceholder="Search countries..."
+                searchTerm={searchTerms.country || ''}
+                onSearchChange={(term) => setSearchTerms({ ...searchTerms, country: term })}
               />
+            </FilterSection>
+
+            {/* Location Filter */}
+            <FilterSection
+              title="Location"
+              icon={<MapPin className="size-3.5" />}
+              isExpanded={expandedSections.includes('location')}
+              onToggle={() => toggleSection('location')}
+              activeCount={filters.locations?.length}
+            >
+              <div className="px-3 pb-2">
+                <input
+                  type="text"
+                  placeholder="Enter location..."
+                  value={searchTerms.locationInput || ''}
+                  onChange={(e) => setSearchTerms({ ...searchTerms, locationInput: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && searchTerms.locationInput?.trim()) {
+                      const newLocation = searchTerms.locationInput.trim()
+                      if (!filters.locations?.includes(newLocation)) {
+                        onChange({
+                          ...filters,
+                          locations: [...(filters.locations || []), newLocation],
+                        })
+                      }
+                      setSearchTerms({ ...searchTerms, locationInput: '' })
+                    }
+                  }}
+                  className="w-full rounded-md border border-black/10 bg-white px-3 py-1.5 text-xs text-black placeholder:text-black/40 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/40"
+                />
+                {filters.locations && filters.locations.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {filters.locations.map((loc) => (
+                      <span
+                        key={loc}
+                        className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-500/20 dark:text-purple-300"
+                      >
+                        {loc}
+                        <button
+                          onClick={() => toggleArrayFilter('locations', loc)}
+                          className="hover:text-purple-900 dark:hover:text-purple-100"
+                        >
+                          <X className="size-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             </FilterSection>
 
             {/* Enrichment Status Filter */}
@@ -295,54 +364,77 @@ export function ProspectsFilters({
           </>
         )}
 
-        {/* Location Filter (both views) */}
-        <FilterSection
-          title="Location"
-          icon={<MapPin className="size-3.5" />}
-          isExpanded={expandedSections.includes('location')}
-          onToggle={() => toggleSection('location')}
-          activeCount={filters.locations?.length}
-        >
-          <div className="px-3 pb-2">
-            <input
-              type="text"
-              placeholder="Enter location..."
-              value={searchTerms.locationInput || ''}
-              onChange={(e) => setSearchTerms({ ...searchTerms, locationInput: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && searchTerms.locationInput?.trim()) {
-                  const newLocation = searchTerms.locationInput.trim()
-                  if (!filters.locations?.includes(newLocation)) {
-                    onChange({
-                      ...filters,
-                      locations: [...(filters.locations || []), newLocation],
-                    })
-                  }
-                  setSearchTerms({ ...searchTerms, locationInput: '' })
-                }
-              }}
-              className="w-full rounded-md border border-black/10 bg-white px-3 py-1.5 text-xs text-black placeholder:text-black/40 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/40"
-            />
-            {filters.locations && filters.locations.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {filters.locations.map((loc) => (
-                  <span
-                    key={loc}
-                    className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-500/20 dark:text-purple-300"
-                  >
-                    {loc}
-                    <button
-                      onClick={() => toggleArrayFilter('locations', loc)}
-                      className="hover:text-purple-900 dark:hover:text-purple-100"
-                    >
-                      <X className="size-3" />
-                    </button>
-                  </span>
-                ))}
+        {/* People view: Country and Location filters */}
+        {view === 'people' && (
+          <>
+            {/* Country Filter */}
+            <FilterSection
+              title="Country"
+              icon={<Globe className="size-3.5" />}
+              isExpanded={expandedSections.includes('country')}
+              onToggle={() => toggleSection('country')}
+              activeCount={filters.countries?.length}
+            >
+              <SearchableCheckboxList
+                options={options.countries.map((c) => ({ value: c, label: c }))}
+                selected={filters.countries || []}
+                onToggle={(value) => toggleArrayFilter('countries', value)}
+                searchPlaceholder="Search countries..."
+                searchTerm={searchTerms.country || ''}
+                onSearchChange={(term) => setSearchTerms({ ...searchTerms, country: term })}
+              />
+            </FilterSection>
+
+            {/* Location Filter */}
+            <FilterSection
+              title="Location"
+              icon={<MapPin className="size-3.5" />}
+              isExpanded={expandedSections.includes('location')}
+              onToggle={() => toggleSection('location')}
+              activeCount={filters.locations?.length}
+            >
+              <div className="px-3 pb-2">
+                <input
+                  type="text"
+                  placeholder="Enter location..."
+                  value={searchTerms.locationInput || ''}
+                  onChange={(e) => setSearchTerms({ ...searchTerms, locationInput: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && searchTerms.locationInput?.trim()) {
+                      const newLocation = searchTerms.locationInput.trim()
+                      if (!filters.locations?.includes(newLocation)) {
+                        onChange({
+                          ...filters,
+                          locations: [...(filters.locations || []), newLocation],
+                        })
+                      }
+                      setSearchTerms({ ...searchTerms, locationInput: '' })
+                    }
+                  }}
+                  className="w-full rounded-md border border-black/10 bg-white px-3 py-1.5 text-xs text-black placeholder:text-black/40 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/40"
+                />
+                {filters.locations && filters.locations.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {filters.locations.map((loc) => (
+                      <span
+                        key={loc}
+                        className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-500/20 dark:text-purple-300"
+                      >
+                        {loc}
+                        <button
+                          onClick={() => toggleArrayFilter('locations', loc)}
+                          className="hover:text-purple-900 dark:hover:text-purple-100"
+                        >
+                          <X className="size-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </FilterSection>
+            </FilterSection>
+          </>
+        )}
     </div>
   )
 }

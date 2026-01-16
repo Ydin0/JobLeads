@@ -13,6 +13,7 @@ export interface ProspectFilters {
   industries?: string[]
   sizes?: string[]
   locations?: string[]
+  countries?: string[]
   // Status filters
   isEnriched?: boolean
   isShortlisted?: boolean
@@ -155,6 +156,7 @@ export function useProspects({
       if (filters.industries?.length) activeFilters.industries = filters.industries
       if (filters.sizes?.length) activeFilters.sizes = filters.sizes
       if (filters.locations?.length) activeFilters.locations = filters.locations
+      if (filters.countries?.length) activeFilters.countries = filters.countries
       if (filters.isEnriched !== undefined) activeFilters.isEnriched = filters.isEnriched
       if (filters.isShortlisted !== undefined) activeFilters.isShortlisted = filters.isShortlisted
       if (filters.hasContacts !== undefined) activeFilters.hasContacts = filters.hasContacts
@@ -233,6 +235,7 @@ export async function fetchFilterOptions(): Promise<{
   departments: string[]
   industries: string[]
   sizes: string[]
+  countries: string[]
   companies: { id: string; name: string }[]
 }> {
   try {
@@ -246,6 +249,7 @@ export async function fetchFilterOptions(): Promise<{
       departments: ['engineering', 'sales', 'marketing', 'hr', 'finance', 'operations', 'design', 'product', 'customer_success', 'legal'],
       industries: [],
       sizes: ['1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5000+'],
+      countries: [],
       companies: [],
     }
   }

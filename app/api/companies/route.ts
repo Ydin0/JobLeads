@@ -2,7 +2,88 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { companies, jobs } from "@/lib/db/schema";
 import { requireOrgAuth } from "@/lib/auth";
-import { eq, desc, count, and, sql, inArray } from "drizzle-orm";
+import { eq, desc, count, and, sql, inArray, ilike } from "drizzle-orm";
+
+// List of countries with their variations/codes for matching
+const COUNTRY_MAPPINGS: Record<string, string[]> = {
+  'United States': ['United States', 'USA', 'US', 'U.S.', 'U.S.A.', 'America'],
+  'United Kingdom': ['United Kingdom', 'UK', 'GB', 'Britain', 'England', 'Scotland', 'Wales'],
+  'Canada': ['Canada', 'CA'],
+  'Germany': ['Germany', 'DE', 'Deutschland'],
+  'France': ['France', 'FR'],
+  'Netherlands': ['Netherlands', 'NL', 'Holland'],
+  'Australia': ['Australia', 'AU'],
+  'Singapore': ['Singapore', 'SG'],
+  'Japan': ['Japan', 'JP'],
+  'India': ['India', 'IN'],
+  'Brazil': ['Brazil', 'BR', 'Brasil'],
+  'Mexico': ['Mexico', 'MX', 'México'],
+  'Spain': ['Spain', 'ES', 'España'],
+  'Italy': ['Italy', 'IT', 'Italia'],
+  'Switzerland': ['Switzerland', 'CH', 'Schweiz', 'Suisse'],
+  'Sweden': ['Sweden', 'SE'],
+  'Denmark': ['Denmark', 'DK'],
+  'Norway': ['Norway', 'NO'],
+  'Finland': ['Finland', 'FI'],
+  'Ireland': ['Ireland', 'IE'],
+  'Belgium': ['Belgium', 'BE'],
+  'Austria': ['Austria', 'AT'],
+  'Poland': ['Poland', 'PL'],
+  'Portugal': ['Portugal', 'PT'],
+  'Czech Republic': ['Czech Republic', 'CZ', 'Czechia'],
+  'Israel': ['Israel', 'IL'],
+  'United Arab Emirates': ['United Arab Emirates', 'UAE', 'AE', 'Dubai', 'Abu Dhabi'],
+  'South Africa': ['South Africa', 'ZA'],
+  'New Zealand': ['New Zealand', 'NZ'],
+  'South Korea': ['South Korea', 'KR', 'Korea'],
+  'China': ['China', 'CN'],
+  'Hong Kong': ['Hong Kong', 'HK'],
+  'Taiwan': ['Taiwan', 'TW'],
+  'Indonesia': ['Indonesia', 'ID'],
+  'Philippines': ['Philippines', 'PH'],
+  'Vietnam': ['Vietnam', 'VN'],
+  'Thailand': ['Thailand', 'TH'],
+  'Malaysia': ['Malaysia', 'MY'],
+  'Argentina': ['Argentina', 'AR'],
+  'Colombia': ['Colombia', 'CO'],
+  'Chile': ['Chile', 'CL'],
+  'Peru': ['Peru', 'PE'],
+  'Egypt': ['Egypt', 'EG'],
+  'Nigeria': ['Nigeria', 'NG'],
+  'Kenya': ['Kenya', 'KE'],
+  'Saudi Arabia': ['Saudi Arabia', 'SA'],
+  'Costa Rica': ['Costa Rica', 'CR'],
+};
+
+// Reverse mapping: code/variation -> country name
+const CODE_TO_COUNTRY: Record<string, string> = {};
+for (const [country, variations] of Object.entries(COUNTRY_MAPPINGS)) {
+  for (const variation of variations) {
+    CODE_TO_COUNTRY[variation.toUpperCase()] = country;
+  }
+}
+
+// Extract country from location string (e.g., "Bristol, GB" -> "United Kingdom")
+function extractCountryFromLocation(location: string): string | null {
+  const parts = location.split(/[,\s]+/);
+  const lastPart = parts[parts.length - 1]?.trim().toUpperCase();
+
+  if (lastPart && CODE_TO_COUNTRY[lastPart]) {
+    return CODE_TO_COUNTRY[lastPart];
+  }
+
+  // Also check if location contains a full country name
+  const locationUpper = location.toUpperCase();
+  for (const [country, variations] of Object.entries(COUNTRY_MAPPINGS)) {
+    for (const variation of variations) {
+      if (variation.length > 3 && locationUpper.includes(variation.toUpperCase())) {
+        return country;
+      }
+    }
+  }
+
+  return null;
+}
 
 // GET /api/companies - List all companies for the organization with pagination
 export async function GET(req: Request) {
@@ -15,9 +96,10 @@ export async function GET(req: Request) {
     const offset = (page - 1) * limit;
     const searchId = searchParams.get("searchId");
 
-    // Filter parameters (comma-separated for multi-select)
+    // Filter parameters (pipe-separated for multi-select to handle values containing commas)
     const sizeFilter = searchParams.get("size");
     const industryFilter = searchParams.get("industry");
+    const countryFilter = searchParams.get("country");
     const locationFilter = searchParams.get("location");
 
     // Build base where clause (always filter by orgId, optionally by searchId)
@@ -30,15 +112,39 @@ export async function GET(req: Request) {
     // Build filtered where clause (includes size, industry, location filters)
     const filterConditions = [...baseConditions];
     if (sizeFilter) {
-      const sizes = sizeFilter.split(",").map(s => s.trim());
+      const sizes = sizeFilter.split("|").map(s => s.trim()).filter(Boolean);
       filterConditions.push(inArray(companies.size, sizes));
     }
     if (industryFilter) {
-      const industries = industryFilter.split(",").map(i => i.trim());
+      const industries = industryFilter.split("|").map(i => i.trim()).filter(Boolean);
       filterConditions.push(inArray(companies.industry, industries));
     }
+    if (countryFilter) {
+      const selectedCountries = countryFilter.split("|").map(c => c.trim()).filter(Boolean);
+      // Get all variations for selected countries
+      const allVariations: string[] = [];
+      for (const country of selectedCountries) {
+        const variations = COUNTRY_MAPPINGS[country] || [country];
+        allVariations.push(...variations);
+      }
+      // Create OR conditions for all variations using consistent ilike calls
+      const countryConditions = allVariations.flatMap((variation) => {
+        if (variation.length <= 3) {
+          // Short code: match at end after comma/space (e.g., "Mumbai, IN" or "Mumbai IN")
+          return [
+            ilike(companies.location, `%, ${variation}`),
+            ilike(companies.location, `% ${variation}`),
+          ];
+        }
+        // Longer name: regular contains match
+        return [ilike(companies.location, `%${variation}%`)];
+      });
+      if (countryConditions.length > 0) {
+        filterConditions.push(sql`(${sql.join(countryConditions, sql` OR `)})`);
+      }
+    }
     if (locationFilter) {
-      const locations = locationFilter.split(",").map(l => l.trim());
+      const locations = locationFilter.split("|").map(l => l.trim()).filter(Boolean);
       filterConditions.push(inArray(companies.location, locations));
     }
     const filteredWhereClause = and(...filterConditions);
@@ -61,10 +167,21 @@ export async function GET(req: Request) {
       .from(companies)
       .where(baseWhereClause);
 
+    // Extract unique countries from location strings
+    const locationsList = filterOptionsResult?.locations || [];
+    const extractedCountries = new Set<string>();
+    for (const loc of locationsList) {
+      const country = extractCountryFromLocation(loc);
+      if (country) {
+        extractedCountries.add(country);
+      }
+    }
+
     const filterOptions = {
       sizes: (filterOptionsResult?.sizes || []).sort(),
       industries: (filterOptionsResult?.industries || []).sort(),
-      locations: (filterOptionsResult?.locations || []).sort(),
+      countries: Array.from(extractedCountries).sort(),
+      locations: locationsList.sort(),
     };
 
     // Overall stats (not affected by filters)
