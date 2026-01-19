@@ -236,6 +236,23 @@ export async function POST(req: Request) {
               ? `${baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`}/api/webhooks/apollo/phones`
               : undefined
 
+            // Local development fallback - warn when webhooks won't work
+            if (webhookUrl) {
+              const isDevelopment = process.env.NODE_ENV === 'development'
+              const isLocalWebhook =
+                webhookUrl.includes('localhost') ||
+                webhookUrl.includes('127.0.0.1') ||
+                webhookUrl.includes('.ngrok') ||
+                webhookUrl.includes('.localtunnel')
+
+              if (isDevelopment && !isLocalWebhook) {
+                console.warn('[Leads Enrich]   LOCAL DEV WARNING: Webhook URL points to production!')
+                console.warn(`[Leads Enrich] Webhook URL: ${webhookUrl}`)
+                console.warn('[Leads Enrich] Apollo will send phone data to production, not your local server.')
+                console.warn('[Leads Enrich] To fix: Set APOLLO_WEBHOOK_URL to a tunnel URL (ngrok, localtunnel) in .env.local')
+              }
+            }
+
             // Call Apollo bulk_match to get full details (unobfuscated names, LinkedIn, emails, phones)
             const enrichedPeople = await bulkEnrichPeople({
               apolloIds: apolloIdsToEnrich,

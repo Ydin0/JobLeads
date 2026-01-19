@@ -273,6 +273,14 @@ export default function ICPDetailPage() {
                 // Ignore cleanup errors on load
             }
 
+            // Cleanup any stale scraper runs first, then fetch data
+            // This handles scrapers that got stuck from previous sessions
+            try {
+                await fetch(`/api/searches/${icpId}/runs/cleanup`, { method: 'POST' })
+            } catch {
+                // Ignore cleanup errors on initial load
+            }
+
             const [icpResponse, runsResponse] = await Promise.all([
                 fetch(`/api/searches/${icpId}`),
                 fetch(`/api/searches/${icpId}/runs`),
@@ -291,7 +299,14 @@ export default function ICPDetailPage() {
 
             if (runsResponse.ok) {
                 const runsData = await runsResponse.json()
-                setScraperRuns(runsData.runs || [])
+                const runs = runsData.runs || []
+                setScraperRuns(runs)
+
+                // If there are still running scrapers, start the polling timer
+                const hasRunning = runs.some((r: ScraperRunAPI) => r.status === 'running' || r.status === 'queued')
+                if (hasRunning && !pollingStartTimeRef.current) {
+                    pollingStartTimeRef.current = Date.now()
+                }
             }
         } catch (err) {
             console.error('Error fetching data:', err)
@@ -383,8 +398,21 @@ export default function ICPDetailPage() {
         } catch (err) {
             console.error('Error running scrapers:', err)
             toast.error(err instanceof Error ? err.message : 'Failed to run scrapers')
+
+            // On error, cleanup any stuck runs and refresh state
+            try {
+                await fetch(`/api/searches/${icpId}/runs/cleanup`, { method: 'POST' })
+                const runsResponse = await fetch(`/api/searches/${icpId}/runs`)
+                if (runsResponse.ok) {
+                    const runsData = await runsResponse.json()
+                    setScraperRuns(runsData.runs || [])
+                }
+            } catch {
+                // Ignore cleanup errors
+            }
         } finally {
             setIsRunningScrapers(false)
+            // Don't reset polling timer here - let it continue if there are still running scrapers
         }
     }
 
@@ -433,9 +461,14 @@ export default function ICPDetailPage() {
         }
     }, [icpId, page, fetchCompanies])
 
+    // Check if there are active scrapers in the runs list
+    const hasActiveScraperRuns = scraperRuns.some(r => r.status === 'running' || r.status === 'queued')
+
     // Poll for scraper run updates with timeout protection
+    // Poll when either isRunningScrapers is true OR there are active scraper runs
     useEffect(() => {
-        if (!isRunningScrapers || !icpId) return
+        const shouldPoll = isRunningScrapers || hasActiveScraperRuns
+        if (!shouldPoll || !icpId) return
 
         // Track when polling started
         if (!pollingStartTimeRef.current) {
@@ -461,6 +494,12 @@ export default function ICPDetailPage() {
                     // Try to cleanup stale runs via API
                     try {
                         await fetch(`/api/searches/${icpId}/runs/cleanup`, { method: 'POST' })
+                        // Refresh runs to show updated status
+                        const runsResponse = await fetch(`/api/searches/${icpId}/runs`)
+                        if (runsResponse.ok) {
+                            const runsData = await runsResponse.json()
+                            setScraperRuns(runsData.runs || [])
+                        }
                     } catch {
                         // Ignore cleanup errors
                     }
@@ -479,7 +518,7 @@ export default function ICPDetailPage() {
 
                 const currentCompleted = new Set(
                     newRuns
-                        .filter(r => r.status === 'completed' || r.status === 'failed')
+                        .filter(r => r.status === 'completed' || r.status === 'failed' || r.status === 'cancelled')
                         .map(r => r.id)
                 )
 
@@ -498,7 +537,7 @@ export default function ICPDetailPage() {
                     await refreshLeads()
                 }
 
-                const allDone = newRuns.length > 0 &&
+                const allDone = newRuns.length === 0 ||
                     newRuns.every(r => ['completed', 'failed', 'cancelled'].includes(r.status))
                 if (allDone) {
                     setIsRunningScrapers(false)
@@ -513,7 +552,7 @@ export default function ICPDetailPage() {
         }, 2000)
 
         return () => clearInterval(pollInterval)
-    }, [isRunningScrapers, icpId, refreshAfterScraperCompletion, refreshLeads, MAX_POLLING_DURATION_MS])
+    }, [isRunningScrapers, hasActiveScraperRuns, icpId, refreshAfterScraperCompletion, refreshLeads, MAX_POLLING_DURATION_MS])
 
     // Poll for phone enrichment status
     useEffect(() => {

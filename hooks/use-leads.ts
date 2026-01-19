@@ -4,26 +4,57 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Lead } from '@/lib/db/schema'
 import { onSearchCompleted, onDataRefresh } from '@/lib/events'
 
-export function useLeads() {
+export interface LeadsPagination {
+  page: number
+  limit: number
+  totalCount: number
+  totalPages: number
+}
+
+interface UseLeadsOptions {
+  searchId?: string
+  page?: number
+  limit?: number
+}
+
+export function useLeads(options: UseLeadsOptions = {}) {
+  const { searchId, page: initialPage = 1, limit: initialLimit = 50 } = options
   const [leads, setLeads] = useState<Lead[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [page, setPage] = useState(initialPage)
+  const [pagination, setPagination] = useState<LeadsPagination>({
+    page: 1,
+    limit: initialLimit,
+    totalCount: 0,
+    totalPages: 0,
+  })
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const pollCountRef = useRef(0) // Track poll attempts to limit infinite polling
+  const MAX_POLL_ATTEMPTS = 30 // Stop polling after 5 minutes (30 * 10s)
 
-  const fetchLeads = useCallback(async () => {
+  const fetchLeads = useCallback(async (pageNum = page) => {
     try {
       setIsLoading(true)
-      const response = await fetch('/api/leads')
+      const params = new URLSearchParams({
+        page: pageNum.toString(),
+        limit: initialLimit.toString(),
+      })
+      if (searchId) {
+        params.set('searchId', searchId)
+      }
+      const response = await fetch(`/api/leads?${params}`)
       if (!response.ok) throw new Error('Failed to fetch leads')
       const data = await response.json()
-      setLeads(data)
+      setLeads(data.leads)
+      setPagination(data.pagination)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [page, initialLimit, searchId])
 
   useEffect(() => {
     fetchLeads()
@@ -43,16 +74,26 @@ export function useLeads() {
     }
   }, [fetchLeads])
 
-  // Auto-refresh when there are leads with pending phone numbers
+  // Auto-refresh when there are leads with pending phone numbers (with timeout)
   useEffect(() => {
     const hasPendingPhones = leads.some(lead => {
       const metadata = lead.metadata as Record<string, unknown> | null
       return metadata?.phonePending === true
     })
 
-    if (hasPendingPhones) {
-      // Poll every 10 seconds when phone numbers are pending
+    if (hasPendingPhones && pollCountRef.current < MAX_POLL_ATTEMPTS) {
+      // Poll every 10 seconds when phone numbers are pending (max 5 minutes)
       pollIntervalRef.current = setInterval(() => {
+        pollCountRef.current += 1
+        if (pollCountRef.current >= MAX_POLL_ATTEMPTS) {
+          // Stop polling after max attempts
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current)
+            pollIntervalRef.current = null
+          }
+          console.log('[useLeads] Stopped polling for pending phones after max attempts')
+          return
+        }
         fetchLeads()
       }, 10000)
     } else {
@@ -60,6 +101,10 @@ export function useLeads() {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current)
         pollIntervalRef.current = null
+      }
+      // Reset poll count when no pending phones
+      if (!hasPendingPhones) {
+        pollCountRef.current = 0
       }
     }
 
@@ -69,6 +114,11 @@ export function useLeads() {
       }
     }
   }, [leads, fetchLeads])
+
+  const goToPage = useCallback((newPage: number) => {
+    setPage(newPage)
+    fetchLeads(newPage)
+  }, [fetchLeads])
 
   const updateLead = async (id: string, data: Partial<Lead>) => {
     const response = await fetch(`/api/leads/${id}`, {
@@ -123,6 +173,9 @@ export function useLeads() {
     leads,
     isLoading,
     error,
+    pagination,
+    page,
+    goToPage,
     fetchLeads,
     updateLead,
     deleteLead,

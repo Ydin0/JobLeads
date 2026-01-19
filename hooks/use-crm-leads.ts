@@ -56,10 +56,10 @@ export function useCRMLeads() {
         try {
             setIsLoading(true)
 
-            // Fetch leads and jobs in parallel
+            // Fetch leads and jobs in parallel with pagination
             const [leadsResponse, jobsResponse] = await Promise.all([
-                fetch('/api/leads'),
-                fetch('/api/jobs'),
+                fetch('/api/leads?limit=100'),
+                fetch('/api/jobs?limit=200'),
             ])
 
             if (!leadsResponse.ok) throw new Error('Failed to fetch leads')
@@ -68,8 +68,11 @@ export function useCRMLeads() {
             const leadsData = await leadsResponse.json()
             const jobsData = await jobsResponse.json()
 
-            setLeads(leadsData)
-            setJobs(jobsData)
+            // Handle paginated responses
+            const leadsArray = leadsData.leads || leadsData
+            const jobsArray = jobsData.jobs || jobsData
+            setLeads(leadsArray)
+            setJobs(jobsArray)
             setError(null)
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An error occurred')

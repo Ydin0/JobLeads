@@ -18,6 +18,21 @@ export async function POST(req: Request) {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
     const webhookUrl = `${baseUrl}/api/webhooks/apollo/phones`;
 
+    // Local development fallback - warn when webhooks won't work
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    const isLocalWebhook =
+      webhookUrl.includes('localhost') ||
+      webhookUrl.includes('127.0.0.1') ||
+      webhookUrl.includes('.ngrok') ||
+      webhookUrl.includes('.localtunnel');
+
+    if (isDevelopment && !isLocalWebhook) {
+      console.warn('[Bulk Enrich]   LOCAL DEV WARNING: Webhook URL points to production!');
+      console.warn(`[Bulk Enrich] Webhook URL: ${webhookUrl}`);
+      console.warn('[Bulk Enrich] Apollo will send phone data to production, not your local server.');
+      console.warn('[Bulk Enrich] To fix: Set APOLLO_WEBHOOK_URL to a tunnel URL (ngrok, localtunnel) in .env.local');
+    }
+
     console.log("[Bulk Enrich] Webhook URL config:", {
       NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || "NOT SET",
       host,
