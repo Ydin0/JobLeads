@@ -782,6 +782,7 @@ export async function POST(req: Request, { params }: RouteContext) {
         id,
         maxRows,
         new Map(sharedCompanyMap), // Copy of shared map with existing companies
+        jobBoards,
         existingRunId
       );
 
