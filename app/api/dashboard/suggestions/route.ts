@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireOrgAuth } from "@/lib/auth";
 import { aiSuggestions, companies, leads, searches, jobs, creditUsage } from "@/lib/db/schema";
-import { eq, and, sql, desc, gte, isNotNull, count } from "drizzle-orm";
+import { eq, and, sql, desc, isNotNull, count } from "drizzle-orm";
 import {
   generateRuleBasedSuggestions,
   generateAISuggestions,
