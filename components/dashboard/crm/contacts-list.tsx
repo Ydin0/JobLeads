@@ -83,7 +83,7 @@ function ContactRow({
     const hasApolloId = !!metadata?.apolloId
 
     const handleFetchPhone = async () => {
-        if (isFetchingPhone || lead.phone || phonePending) return
+        if (isFetchingPhone || lead.phone) return
 
         setIsFetchingPhone(true)
         try {
@@ -98,8 +98,16 @@ function ContactRow({
             }
 
             if (data.phone) {
-                toast.success('Phone number found!')
+                if (data.isCompanyPhone) {
+                    toast.success('Company phone found (personal phone not available)')
+                } else {
+                    toast.success('Phone number found!')
+                }
                 onLeadUpdate?.(lead.id, { phone: data.phone })
+            } else if (data.localDevWarning) {
+                toast.warning('Webhook URL points to production. Set APOLLO_WEBHOOK_URL in .env.local for local dev.', {
+                    duration: 6000,
+                })
             } else if (data.pending) {
                 toast.info('Phone lookup initiated. Will appear shortly.')
                 onLeadUpdate?.(lead.id, {
@@ -156,13 +164,22 @@ function ContactRow({
                         </span>
                         <CopyButton text={lead.phone} label="phone" />
                     </div>
-                ) : phonePending || isFetchingPhone ? (
+                ) : isFetchingPhone ? (
                     <div className="flex items-center gap-1.5">
                         <Loader2 className="size-3 animate-spin text-emerald-500" />
                         <span className="text-[10px] text-emerald-600 dark:text-emerald-400">
                             Fetching phone...
                         </span>
                     </div>
+                ) : phonePending ? (
+                    <button
+                        onClick={handleFetchPhone}
+                        className="flex items-center gap-1.5 text-[10px] text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
+                        title="Click to retry phone lookup"
+                    >
+                        <Phone className="size-3" />
+                        <span>Pending - Click to retry</span>
+                    </button>
                 ) : hasApolloId ? (
                     <button
                         onClick={handleFetchPhone}

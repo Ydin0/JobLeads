@@ -137,9 +137,27 @@ async function processJobResults(
   for (const company of extractedCompanies) {
     const companyKey = company.name.toLowerCase();
 
-    // Skip if we already have this company
+    // Skip if we already have this company in our map
     if (companyIdMap.has(companyKey)) continue;
 
+    // Check if company already exists in DB (may have been inserted by a parallel scraper)
+    // This is important because there's no unique constraint on (orgId, searchId, name)
+    const existing = await db.query.companies.findFirst({
+      where: and(
+        eq(companies.orgId, orgId),
+        eq(companies.searchId, searchId),
+        sql`LOWER(${companies.name}) = ${companyKey}`
+      ),
+      columns: { id: true },
+    });
+
+    if (existing) {
+      // Company already exists, use its ID
+      companyIdMap.set(companyKey, existing.id);
+      continue;
+    }
+
+    // Insert new company
     const [inserted] = await db
       .insert(companies)
       .values({
@@ -153,7 +171,6 @@ async function processJobResults(
           jobCount: company.jobCount,
         },
       })
-      .onConflictDoNothing()
       .returning();
 
     if (inserted) {
@@ -562,19 +579,35 @@ export async function POST(req: Request, { params }: RouteContext) {
 
     console.log(`[Search Run] Created ${queuedRunIds.size} queued runs, starting parallel execution`);
 
+    // Pre-load existing companies for this search to avoid duplicates in parallel execution
+    // This ensures all scrapers use the same company IDs for companies that already exist
+    const existingCompanies = await db
+      .select({ id: companies.id, name: companies.name })
+      .from(companies)
+      .where(and(eq(companies.orgId, orgId), eq(companies.searchId, id)));
+
+    const sharedCompanyMap = new Map<string, string>();
+    for (const company of existingCompanies) {
+      sharedCompanyMap.set(company.name.toLowerCase(), company.id);
+    }
+    console.log(`[Search Run] Pre-loaded ${sharedCompanyMap.size} existing companies for this search`);
+
     // Run all scrapers in parallel using Promise.allSettled for fault tolerance
+    // Each scraper gets a copy of the shared map to avoid race conditions on writes
+    // but shares existing company IDs to prevent duplicates
     const scraperPromises = scrapersToRun.map(async ({ scraper, index }) => {
       const existingRunId = queuedRunIds.get(index);
 
-      // Each scraper gets its own company map to avoid race conditions
-      // We'll merge results at the end
+      // Pass a copy of the shared map so each scraper can add new companies without conflicts
+      // New companies added by one scraper won't be visible to others, but that's OK
+      // since they'll still create their own records (which is fine for new companies)
       const result = await runSingleScraper(
         scraper,
         index,
         orgId,
         id,
         maxRows,
-        new Map<string, string>(), // Fresh map for each parallel scraper
+        new Map(sharedCompanyMap), // Copy of shared map with existing companies
         existingRunId
       );
 

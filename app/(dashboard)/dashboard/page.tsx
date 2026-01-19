@@ -29,8 +29,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { useSearches } from '@/hooks/use-searches'
-import { useCompanies } from '@/hooks/use-companies'
-import { useLeads } from '@/hooks/use-leads'
+import { useDashboardStats } from '@/hooks/use-dashboard-stats'
 import { useCredits } from '@/hooks/use-credits'
 import { useDashboardSuggestions } from '@/hooks/use-dashboard-suggestions'
 import { useUser, useOrganization } from '@clerk/nextjs'
@@ -39,8 +38,7 @@ import type { DashboardSuggestion } from '@/lib/ai-suggestions'
 
 export default function DashboardPage() {
     const { searches, isLoading: searchesLoading } = useSearches()
-    const { companies, isLoading: companiesLoading, pagination: companiesPagination } = useCompanies()
-    const { leads, isLoading: leadsLoading } = useLeads()
+    const { stats, isLoading: statsLoading } = useDashboardStats()
     const { enrichmentRemaining, icpRemaining, isLoading: creditsLoading } = useCredits()
     const { user } = useUser()
     const { memberships } = useOrganization({
@@ -49,17 +47,17 @@ export default function DashboardPage() {
         },
     })
 
-    const isLoading = searchesLoading || companiesLoading || leadsLoading || creditsLoading
+    const isLoading = searchesLoading || statsLoading || creditsLoading
 
     // ICPs are searches in this app
     const icps = searches
 
-    // Calculate stats
-    const totalCompanies = companiesPagination.totalCount
-    const totalLeads = leads.length
+    // Use stats from the optimized endpoint
+    const totalCompanies = stats?.counts.companies || 0
+    const totalLeads = stats?.counts.leads || 0
 
-    // Get recent activity from leads and searches
-    const recentActivity = generateRecentActivity(leads, searches, companies)
+    // Get recent activity from stats endpoint (already optimized)
+    const recentActivity = generateRecentActivityFromStats(stats)
 
     // AI Suggestions from API (rule-based + AI-generated)
     const {
@@ -441,12 +439,18 @@ export default function DashboardPage() {
     )
 }
 
-// Helper function to generate activity from existing data
-function generateRecentActivity(
-    leads: Array<{ id: string; firstName: string; lastName: string; createdAt: Date | string }>,
-    searches: Array<{ id: string; name: string; lastRunAt: Date | string | null; resultsCount: number | null }>,
-    companies: Array<{ id: string; name: string; isEnriched: boolean | null; enrichedAt: Date | string | null }>
+// Helper function to generate activity from stats endpoint data
+function generateRecentActivityFromStats(
+    stats: {
+        recentActivity: {
+            leads: Array<{ id: string; firstName: string; lastName: string; createdAt: string }>
+            searches: Array<{ id: string; name: string; lastRunAt: string | null; resultsCount: number | null }>
+            enrichedCompanies: Array<{ id: string; name: string; enrichedAt: string | null; isEnriched: boolean | null }>
+        }
+    } | null
 ) {
+    if (!stats) return []
+
     const activities: Array<{
         id: string
         type: 'search_completed' | 'companies_enriched' | 'leads_added'
@@ -455,51 +459,40 @@ function generateRecentActivity(
         timestamp: Date | string
     }> = []
 
-    // Add recent lead additions
-    const recentLeads = leads
-        .filter(l => l.createdAt)
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 5)
+    const { leads, searches, enrichedCompanies } = stats.recentActivity
 
-    if (recentLeads.length > 0) {
+    // Add recent lead additions
+    if (leads.length > 0) {
         activities.push({
-            id: `leads-${recentLeads[0].id}`,
+            id: `leads-${leads[0].id}`,
             type: 'leads_added',
-            title: `${recentLeads.length} new contact${recentLeads.length > 1 ? 's' : ''}`,
-            description: `${recentLeads[0].firstName} ${recentLeads[0].lastName}${recentLeads.length > 1 ? ` +${recentLeads.length - 1} more` : ''}`,
-            timestamp: recentLeads[0].createdAt,
+            title: `${leads.length} new contact${leads.length > 1 ? 's' : ''}`,
+            description: `${leads[0].firstName} ${leads[0].lastName}${leads.length > 1 ? ` +${leads.length - 1} more` : ''}`,
+            timestamp: leads[0].createdAt,
         })
     }
 
     // Add search completions
-    const recentSearchRuns = searches
-        .filter(s => s.lastRunAt)
-        .sort((a, b) => new Date(b.lastRunAt!).getTime() - new Date(a.lastRunAt!).getTime())
-        .slice(0, 3)
-
-    recentSearchRuns.forEach(search => {
-        activities.push({
-            id: `search-${search.id}`,
-            type: 'search_completed',
-            title: 'Scraper completed',
-            description: `${search.name} · ${search.resultsCount || 0} companies`,
-            timestamp: search.lastRunAt!,
-        })
+    searches.forEach(search => {
+        if (search.lastRunAt) {
+            activities.push({
+                id: `search-${search.id}`,
+                type: 'search_completed',
+                title: 'Scraper completed',
+                description: `${search.name} · ${search.resultsCount || 0} companies`,
+                timestamp: search.lastRunAt,
+            })
+        }
     })
 
     // Add recent enrichments
-    const recentEnrichments = companies
-        .filter(c => c.isEnriched && c.enrichedAt)
-        .sort((a, b) => new Date(b.enrichedAt!).getTime() - new Date(a.enrichedAt!).getTime())
-        .slice(0, 3)
-
-    if (recentEnrichments.length > 0) {
+    if (enrichedCompanies.length > 0) {
         activities.push({
-            id: `enrich-${recentEnrichments[0].id}`,
+            id: `enrich-${enrichedCompanies[0].id}`,
             type: 'companies_enriched',
-            title: `${recentEnrichments.length} enriched`,
-            description: recentEnrichments.map(c => c.name).slice(0, 2).join(', '),
-            timestamp: recentEnrichments[0].enrichedAt!,
+            title: `${enrichedCompanies.length} enriched`,
+            description: enrichedCompanies.map(c => c.name).slice(0, 2).join(', '),
+            timestamp: enrichedCompanies[0].enrichedAt!,
         })
     }
 

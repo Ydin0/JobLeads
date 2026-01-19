@@ -370,20 +370,34 @@ export async function POST(req: Request, { params }: RouteContext) {
           ? webhookUrl
           : `${webhookUrl}/api/webhooks/apollo/phones`
 
+        // Local development fallback - warn when webhooks won't work
+        const isDevelopment = process.env.NODE_ENV === 'development'
+        const isLocalWebhook =
+          fullWebhookUrl.includes('localhost') ||
+          fullWebhookUrl.includes('127.0.0.1') ||
+          fullWebhookUrl.includes('.ngrok') ||
+          fullWebhookUrl.includes('.localtunnel')
+
+        if (isDevelopment && !isLocalWebhook) {
+          console.warn('[Quick Enrich] ⚠️  LOCAL DEV WARNING: Webhook URL points to production!')
+          console.warn(`[Quick Enrich] Webhook URL: ${fullWebhookUrl}`)
+          console.warn('[Quick Enrich] Apollo will send phone data to production, not your local server.')
+          console.warn('[Quick Enrich] To fix: Set APOLLO_WEBHOOK_URL to a tunnel URL (ngrok, localtunnel) in .env.local')
+        }
+
         console.log(`[Quick Enrich] Requesting phone reveal for ${allApolloIds.length} employees via webhook: ${fullWebhookUrl}`)
 
-        try {
-          await bulkEnrichPeople({
-            apolloIds: allApolloIds,
-            revealPhoneNumber: true,
-            webhookUrl: fullWebhookUrl,
-          })
-          phoneRevealRequested = true
-          console.log(`[Quick Enrich] Phone reveal requested for ${allApolloIds.length} employees`)
-        } catch (phoneError) {
-          console.error('[Quick Enrich] Failed to request phone reveal:', phoneError)
-          // Continue without phone reveal - not a critical error
-        }
+        // Fire and forget - don't await since phone data comes via webhook asynchronously
+        bulkEnrichPeople({
+          apolloIds: allApolloIds,
+          revealPhoneNumber: true,
+          webhookUrl: fullWebhookUrl,
+        })
+          .then(() => console.log(`[Quick Enrich] Phone reveal completed for ${allApolloIds.length} employees`))
+          .catch((err) => console.error('[Quick Enrich] Phone reveal error:', err))
+
+        phoneRevealRequested = true
+        console.log(`[Quick Enrich] Phone reveal initiated (async) for ${allApolloIds.length} employees`)
       } else {
         console.warn('[Quick Enrich] No webhook URL configured - skipping phone reveal. Set APOLLO_WEBHOOK_URL or NEXT_PUBLIC_APP_URL')
       }

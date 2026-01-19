@@ -80,6 +80,7 @@ export interface EnrichedPerson {
   lastName: string;
   email: string | null;
   phone: string | null;
+  companyPhone: string | null;
   jobTitle: string | null;
   linkedinUrl: string | null;
   location: string | null;
@@ -185,12 +186,16 @@ export async function enrichPerson(params: {
     const locationParts = [person.city, person.state, person.country].filter(Boolean);
     const location = locationParts.length > 0 ? locationParts.join(", ") : null;
 
+    // Extract company phone as fallback
+    const companyPhone = (person.organization as { phone?: string })?.phone || null;
+
     return {
       apolloId: person.id || null,
       firstName: person.first_name,
       lastName: person.last_name,
       email: person.email || null,
       phone: primaryPhone,
+      companyPhone,
       jobTitle: person.title || null,
       linkedinUrl: person.linkedin_url || null,
       location,
@@ -388,6 +393,7 @@ export async function searchPeopleAtCompany(params: {
       website_url?: string;
       linkedin_url?: string;
       logo_url?: string;
+      phone?: string;
     };
   }
 
@@ -410,6 +416,7 @@ export async function searchPeopleAtCompany(params: {
       lastName,
       email: person.email || null,
       phone: primaryPhone,
+      companyPhone: person.organization?.phone || null,
       jobTitle: person.title || null,
       linkedinUrl: person.linkedin_url || null,
       location,
@@ -522,23 +529,81 @@ export async function bulkEnrichPeople(params: {
 
   // Apollo has a limit of 10 people per bulk_match request
   const BATCH_SIZE = 10;
-  const allEnrichedPeople: EnrichedPerson[] = [];
+  const CONCURRENT_BATCHES = 5; // Process 5 batches in parallel
 
-  // Split into batches of 10
+  // Response contains matches array with full person data
+  interface BulkMatchPerson {
+    id: string;
+    first_name: string;
+    last_name: string;
+    title?: string;
+    email?: string;
+    email_status?: string;
+    linkedin_url?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+    seniority?: string;
+    departments?: string[];
+    phone_numbers?: Array<{
+      raw_number: string;
+      sanitized_number: string;
+      type: string;
+      status: string;
+    }>;
+    organization?: {
+      id: string;
+      name: string;
+      website_url?: string;
+      linkedin_url?: string;
+      logo_url?: string;
+      phone?: string;
+    };
+  }
+
+  const mapPerson = (person: BulkMatchPerson | null): EnrichedPerson | null => {
+    if (!person) return null;
+
+    const primaryPhone = person.phone_numbers?.find(p => p.status === "verified")?.sanitized_number
+      || person.phone_numbers?.[0]?.sanitized_number
+      || null;
+
+    const locationParts = [person.city, person.state, person.country].filter(Boolean);
+    const location = locationParts.length > 0 ? locationParts.join(", ") : null;
+
+    return {
+      apolloId: person.id || null,
+      firstName: person.first_name,
+      lastName: person.last_name,
+      email: person.email || null,
+      phone: primaryPhone,
+      companyPhone: person.organization?.phone || null,
+      jobTitle: person.title || null,
+      linkedinUrl: person.linkedin_url || null,
+      location,
+      seniority: person.seniority || null,
+      departments: person.departments || [],
+      company: person.organization ? {
+        name: person.organization.name,
+        website: person.organization.website_url || null,
+        linkedinUrl: person.organization.linkedin_url || null,
+        logoUrl: person.organization.logo_url || null,
+      } : null,
+    };
+  };
+
+  // Split into batches
+  const batches: string[][] = [];
   for (let i = 0; i < apolloIds.length; i += BATCH_SIZE) {
-    const batchIds = apolloIds.slice(i, i + BATCH_SIZE);
-    const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
-    const totalBatches = Math.ceil(apolloIds.length / BATCH_SIZE);
+    batches.push(apolloIds.slice(i, i + BATCH_SIZE));
+  }
 
-    console.log(`[Apollo] Bulk enriching batch ${batchNumber}/${totalBatches} (${batchIds.length} people), reveal_phone: ${revealPhoneNumber}`);
+  console.log(`[Apollo] Processing ${batches.length} batches (${CONCURRENT_BATCHES} concurrent), reveal_phone: ${revealPhoneNumber}`);
 
-    // Build details array with person IDs only
+  const processBatch = async (batchIds: string[], batchNumber: number): Promise<EnrichedPerson[]> => {
     const details = batchIds.map(id => ({ id }));
-
-    // Build request body
     const requestBody: Record<string, unknown> = { details };
 
-    // Add phone reveal settings at top level if requested
     if (revealPhoneNumber) {
       requestBody.reveal_phone_number = true;
       requestBody.webhook_url = webhookUrl;
@@ -558,82 +623,27 @@ export async function bulkEnrichPeople(params: {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`[Apollo] Batch ${batchNumber} API error:`, response.status, errorText);
-        // Continue with other batches instead of failing completely
-        continue;
+        return [];
       }
 
       const data = await response.json();
-
-      // Response contains matches array with full person data
-      interface BulkMatchPerson {
-        id: string;
-        first_name: string;
-        last_name: string;
-        title?: string;
-        email?: string;
-        email_status?: string;
-        linkedin_url?: string;
-        city?: string;
-        state?: string;
-        country?: string;
-        seniority?: string;
-        departments?: string[];
-        phone_numbers?: Array<{
-          raw_number: string;
-          sanitized_number: string;
-          type: string;
-          status: string;
-        }>;
-        organization?: {
-          id: string;
-          name: string;
-          website_url?: string;
-          linkedin_url?: string;
-          logo_url?: string;
-        };
-      }
-
-      const batchEnrichedPeople: EnrichedPerson[] = (data.matches || []).map((person: BulkMatchPerson | null) => {
-        if (!person) return null;
-
-        const primaryPhone = person.phone_numbers?.find(p => p.status === "verified")?.sanitized_number
-          || person.phone_numbers?.[0]?.sanitized_number
-          || null;
-
-        const locationParts = [person.city, person.state, person.country].filter(Boolean);
-        const location = locationParts.length > 0 ? locationParts.join(", ") : null;
-
-        return {
-          apolloId: person.id || null,
-          firstName: person.first_name,
-          lastName: person.last_name,
-          email: person.email || null,
-          phone: primaryPhone,
-          jobTitle: person.title || null,
-          linkedinUrl: person.linkedin_url || null,
-          location,
-          seniority: person.seniority || null,
-          departments: person.departments || [],
-          company: person.organization ? {
-            name: person.organization.name,
-            website: person.organization.website_url || null,
-            linkedinUrl: person.organization.linkedin_url || null,
-            logoUrl: person.organization.logo_url || null,
-          } : null,
-        };
-      }).filter(Boolean);
-
-      allEnrichedPeople.push(...batchEnrichedPeople);
-      console.log(`[Apollo] Batch ${batchNumber} enriched ${batchEnrichedPeople.length} people`);
-
-      // Small delay between batches to avoid rate limiting
-      if (i + BATCH_SIZE < apolloIds.length) {
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
+      const results = (data.matches || []).map(mapPerson).filter(Boolean) as EnrichedPerson[];
+      console.log(`[Apollo] Batch ${batchNumber}/${batches.length} enriched ${results.length} people`);
+      return results;
     } catch (error) {
       console.error(`[Apollo] Error in batch ${batchNumber}:`, error);
-      // Continue with other batches
+      return [];
     }
+  };
+
+  // Process batches with concurrency limit
+  const allEnrichedPeople: EnrichedPerson[] = [];
+  for (let i = 0; i < batches.length; i += CONCURRENT_BATCHES) {
+    const concurrentBatches = batches.slice(i, i + CONCURRENT_BATCHES);
+    const results = await Promise.all(
+      concurrentBatches.map((batch, idx) => processBatch(batch, i + idx + 1))
+    );
+    allEnrichedPeople.push(...results.flat());
   }
 
   console.log(`[Apollo] Total enriched: ${allEnrichedPeople.length} of ${apolloIds.length} people`);
