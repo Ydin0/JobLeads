@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { leads, creditUsage, organizationMembers } from '@/lib/db/schema'
+import { leads, creditUsage, organizationMembers, creditHistory } from '@/lib/db/schema'
 import { requireOrgAuth, checkMemberCredits } from '@/lib/auth'
 import { eq, and, sql } from 'drizzle-orm'
 import {
@@ -282,13 +282,16 @@ export async function POST(
       // Only charge credits if Apollo API was actually called
       if (apiCallMade) {
         console.log(`[Fetch Phone] Charging 1 credit (API was called)`)
-        await db
+
+        // Update credit usage counters
+        const [updatedCredits] = await db
           .update(creditUsage)
           .set({
             enrichmentUsed: sql`${creditUsage.enrichmentUsed} + 1`,
             updatedAt: new Date(),
           })
           .where(eq(creditUsage.orgId, orgId))
+          .returning()
 
         await db
           .update(organizationMembers)
@@ -297,6 +300,22 @@ export async function POST(
             updatedAt: new Date(),
           })
           .where(and(eq(organizationMembers.orgId, orgId), eq(organizationMembers.userId, userId)))
+
+        // Log to credit history for tracking
+        await db.insert(creditHistory).values({
+          orgId,
+          userId,
+          creditType: 'enrichment',
+          transactionType: 'phone_fetch',
+          creditsUsed: 1,
+          balanceAfter: updatedCredits ? updatedCredits.enrichmentLimit - updatedCredits.enrichmentUsed : null,
+          description: `Phone fetch for ${lead.firstName} ${lead.lastName}`,
+          metadata: {
+            leadId,
+            apolloId,
+            phoneFound: true,
+          },
+        })
       } else {
         console.log(`[Fetch Phone] No credits charged (phone from cache)`)
       }
@@ -328,13 +347,16 @@ export async function POST(
       // Only charge credits if Apollo API was actually called
       if (apiCallMade) {
         console.log(`[Fetch Phone] Charging 1 credit (API was called for pending phone)`)
-        await db
+
+        // Update credit usage counters
+        const [updatedCredits] = await db
           .update(creditUsage)
           .set({
             enrichmentUsed: sql`${creditUsage.enrichmentUsed} + 1`,
             updatedAt: new Date(),
           })
           .where(eq(creditUsage.orgId, orgId))
+          .returning()
 
         await db
           .update(organizationMembers)
@@ -343,6 +365,23 @@ export async function POST(
             updatedAt: new Date(),
           })
           .where(and(eq(organizationMembers.orgId, orgId), eq(organizationMembers.userId, userId)))
+
+        // Log to credit history for tracking
+        await db.insert(creditHistory).values({
+          orgId,
+          userId,
+          creditType: 'enrichment',
+          transactionType: 'phone_fetch',
+          creditsUsed: 1,
+          balanceAfter: updatedCredits ? updatedCredits.enrichmentLimit - updatedCredits.enrichmentUsed : null,
+          description: `Phone fetch for ${lead.firstName} ${lead.lastName} (pending webhook)`,
+          metadata: {
+            leadId,
+            apolloId,
+            phoneFound: false,
+            pending: true,
+          },
+        })
       }
 
       console.log(`[Fetch Phone] Phone will be delivered via webhook`)
