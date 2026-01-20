@@ -9,7 +9,7 @@
 
 import { db } from '@/lib/db'
 import { globalEmployees, globalCompanies } from '@/lib/db/schema'
-import { eq, or, and, sql } from 'drizzle-orm'
+import { eq, or, sql } from 'drizzle-orm'
 import { cacheGet, cacheSet, CACHE_KEYS, CACHE_TTL } from '@/lib/redis'
 import type { EnrichedPerson, EnrichedCompany } from '@/lib/apollo'
 
@@ -429,7 +429,7 @@ export async function cachePhone(apolloId: string, phone: string): Promise<void>
         updatedAt: new Date(),
       })
       .where(eq(globalEmployees.apolloId, apolloId))
-      .returning({ id: globalEmployees.id })
+      .returning()
 
     if (result.length > 0) {
       console.log(`[EnrichmentCache] 🐘 Phone updated in DB for Apollo ID: ${apolloId}`)
