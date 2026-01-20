@@ -98,11 +98,7 @@ function ContactRow({
             }
 
             if (data.phone) {
-                if (data.isCompanyPhone) {
-                    toast.success('Company phone found (personal phone not available)')
-                } else {
-                    toast.success('Phone number found!')
-                }
+                toast.success('Personal phone number found!')
                 onLeadUpdate?.(lead.id, { phone: data.phone })
             } else if (data.localDevWarning) {
                 toast.warning('Webhook URL points to production. Set APOLLO_WEBHOOK_URL in .env.local for local dev.', {
@@ -156,10 +152,11 @@ function ContactRow({
                         <CopyButton text={lead.email} label="email" />
                     </div>
                 )}
+                {/* Personal phone (from Get Phone) */}
                 {lead.phone ? (
                     <div className="flex items-center gap-1">
-                        <Phone className="size-3 text-black/30 dark:text-white/30" />
-                        <span className="text-[10px] text-black/60 dark:text-white/60">
+                        <Phone className="size-3 text-green-500" />
+                        <span className="text-[10px] text-black/60 dark:text-white/60" title="Personal phone">
                             {lead.phone}
                         </span>
                         <CopyButton text={lead.phone} label="phone" />
@@ -181,14 +178,35 @@ function ContactRow({
                         <span>Pending - Click to retry</span>
                     </button>
                 ) : hasApolloId ? (
-                    <button
-                        onClick={handleFetchPhone}
-                        className="flex items-center gap-1 rounded-md border border-black/10 px-2 py-1 text-[10px] font-medium text-black/50 transition-colors hover:border-black/20 hover:bg-black/5 hover:text-black/70 dark:border-white/10 dark:text-white/50 dark:hover:border-white/20 dark:hover:bg-white/5 dark:hover:text-white/70"
-                        title="Fetch phone number (uses 1 credit)"
-                    >
-                        <PhoneCall className="size-3" />
-                        <span>Get Phone</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {/* Show company phone if available */}
+                        {lead.companyPhone && (
+                            <div className="flex items-center gap-1" title="Company phone (official)">
+                                <Phone className="size-3 text-black/30 dark:text-white/30" />
+                                <span className="text-[10px] text-black/40 dark:text-white/40">
+                                    {lead.companyPhone}
+                                </span>
+                                <CopyButton text={lead.companyPhone} label="company phone" />
+                            </div>
+                        )}
+                        {/* Get Phone button for personal phone */}
+                        <button
+                            onClick={handleFetchPhone}
+                            className="flex items-center gap-1 rounded-md border border-black/10 px-2 py-1 text-[10px] font-medium text-black/50 transition-colors hover:border-black/20 hover:bg-black/5 hover:text-black/70 dark:border-white/10 dark:text-white/50 dark:hover:border-white/20 dark:hover:bg-white/5 dark:hover:text-white/70"
+                            title="Fetch personal phone number (uses 1 credit)"
+                        >
+                            <PhoneCall className="size-3" />
+                            <span>Get Phone</span>
+                        </button>
+                    </div>
+                ) : lead.companyPhone ? (
+                    <div className="flex items-center gap-1" title="Company phone (official)">
+                        <Phone className="size-3 text-black/30 dark:text-white/30" />
+                        <span className="text-[10px] text-black/40 dark:text-white/40">
+                            {lead.companyPhone}
+                        </span>
+                        <CopyButton text={lead.companyPhone} label="company phone" />
+                    </div>
                 ) : null}
                 {lead.linkedinUrl && (
                     <a
