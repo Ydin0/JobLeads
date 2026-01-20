@@ -30,7 +30,7 @@ async function resetPhoneStatus() {
       updatedAt: new Date(),
     })
     .where(eq(leads.orgId, orgId))
-    .returning({ id: leads.id });
+    .returning();
 
   console.log("[Debug] Reset phone status for", result.length, "leads");
 

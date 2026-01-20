@@ -3,7 +3,7 @@
 import type { AIInsights, OutreachPlaybook } from './mock-ai-content'
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY
-const OPENAI_MODEL = 'gpt-5-mini'
+const OPENAI_MODEL = 'gpt-4o-mini'
 
 // Re-export types for convenience
 export type { AIInsights, OutreachPlaybook }

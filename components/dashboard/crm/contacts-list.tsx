@@ -83,7 +83,7 @@ function ContactRow({
     const hasApolloId = !!metadata?.apolloId
 
     const handleFetchPhone = async () => {
-        if (isFetchingPhone || lead.phone || phonePending) return
+        if (isFetchingPhone || lead.phone) return
 
         setIsFetchingPhone(true)
         try {
@@ -98,8 +98,12 @@ function ContactRow({
             }
 
             if (data.phone) {
-                toast.success('Phone number found!')
+                toast.success('Personal phone number found!')
                 onLeadUpdate?.(lead.id, { phone: data.phone })
+            } else if (data.localDevWarning) {
+                toast.warning('Webhook URL points to production. Set APOLLO_WEBHOOK_URL in .env.local for local dev.', {
+                    duration: 6000,
+                })
             } else if (data.pending) {
                 toast.info('Phone lookup initiated. Will appear shortly.')
                 onLeadUpdate?.(lead.id, {
@@ -148,30 +152,61 @@ function ContactRow({
                         <CopyButton text={lead.email} label="email" />
                     </div>
                 )}
+                {/* Personal phone (from Get Phone) */}
                 {lead.phone ? (
                     <div className="flex items-center gap-1">
-                        <Phone className="size-3 text-black/30 dark:text-white/30" />
-                        <span className="text-[10px] text-black/60 dark:text-white/60">
+                        <Phone className="size-3 text-green-500" />
+                        <span className="text-[10px] text-black/60 dark:text-white/60" title="Personal phone">
                             {lead.phone}
                         </span>
                         <CopyButton text={lead.phone} label="phone" />
                     </div>
-                ) : phonePending || isFetchingPhone ? (
+                ) : isFetchingPhone ? (
                     <div className="flex items-center gap-1.5">
                         <Loader2 className="size-3 animate-spin text-emerald-500" />
                         <span className="text-[10px] text-emerald-600 dark:text-emerald-400">
                             Fetching phone...
                         </span>
                     </div>
-                ) : hasApolloId ? (
+                ) : phonePending ? (
                     <button
                         onClick={handleFetchPhone}
-                        className="flex items-center gap-1 rounded-md border border-black/10 px-2 py-1 text-[10px] font-medium text-black/50 transition-colors hover:border-black/20 hover:bg-black/5 hover:text-black/70 dark:border-white/10 dark:text-white/50 dark:hover:border-white/20 dark:hover:bg-white/5 dark:hover:text-white/70"
-                        title="Fetch phone number (uses 1 credit)"
+                        className="flex items-center gap-1.5 text-[10px] text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
+                        title="Click to retry phone lookup"
                     >
-                        <PhoneCall className="size-3" />
-                        <span>Get Phone</span>
+                        <Phone className="size-3" />
+                        <span>Pending - Click to retry</span>
                     </button>
+                ) : hasApolloId ? (
+                    <div className="flex items-center gap-2">
+                        {/* Show company phone if available */}
+                        {lead.companyPhone && (
+                            <div className="flex items-center gap-1" title="Company phone (official)">
+                                <Phone className="size-3 text-black/30 dark:text-white/30" />
+                                <span className="text-[10px] text-black/40 dark:text-white/40">
+                                    {lead.companyPhone}
+                                </span>
+                                <CopyButton text={lead.companyPhone} label="company phone" />
+                            </div>
+                        )}
+                        {/* Get Phone button for personal phone */}
+                        <button
+                            onClick={handleFetchPhone}
+                            className="flex items-center gap-1 rounded-md border border-black/10 px-2 py-1 text-[10px] font-medium text-black/50 transition-colors hover:border-black/20 hover:bg-black/5 hover:text-black/70 dark:border-white/10 dark:text-white/50 dark:hover:border-white/20 dark:hover:bg-white/5 dark:hover:text-white/70"
+                            title="Fetch personal phone number (uses 1 credit)"
+                        >
+                            <PhoneCall className="size-3" />
+                            <span>Get Phone</span>
+                        </button>
+                    </div>
+                ) : lead.companyPhone ? (
+                    <div className="flex items-center gap-1" title="Company phone (official)">
+                        <Phone className="size-3 text-black/30 dark:text-white/30" />
+                        <span className="text-[10px] text-black/40 dark:text-white/40">
+                            {lead.companyPhone}
+                        </span>
+                        <CopyButton text={lead.companyPhone} label="company phone" />
+                    </div>
                 ) : null}
                 {lead.linkedinUrl && (
                     <a

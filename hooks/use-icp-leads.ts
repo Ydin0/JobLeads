@@ -44,9 +44,10 @@ export function useICPLeads(icpId: string) {
       setIsLoading(true)
 
       // Fetch leads and jobs filtered by ICP in parallel
+      // Use a higher limit for ICP detail page to show more data
       const [leadsResponse, jobsResponse] = await Promise.all([
-        fetch(`/api/leads?searchId=${icpId}`),
-        fetch(`/api/jobs?searchId=${icpId}`),
+        fetch(`/api/leads?searchId=${icpId}&limit=100`),
+        fetch(`/api/jobs?searchId=${icpId}&limit=200`),
       ])
 
       if (!leadsResponse.ok) throw new Error('Failed to fetch leads')
@@ -55,8 +56,11 @@ export function useICPLeads(icpId: string) {
       const leadsData = await leadsResponse.json()
       const jobsData = await jobsResponse.json()
 
-      setLeads(leadsData)
-      setJobs(jobsData)
+      // Handle paginated responses from APIs
+      const leadsArray = leadsData.leads || leadsData
+      const jobsArray = jobsData.jobs || jobsData
+      setLeads(leadsArray)
+      setJobs(jobsArray)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
