@@ -413,6 +413,11 @@ export const creditHistory = pgTable("credit_history", {
     employeesEnriched?: number;
     cacheHit?: boolean;
     filters?: Record<string, unknown>;
+    // Phone fetch specific fields
+    leadId?: string;
+    apolloId?: string;
+    phoneFound?: boolean;
+    pending?: boolean;
   }>(),
 
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
