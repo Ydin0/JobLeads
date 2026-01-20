@@ -236,7 +236,8 @@ export const leads = pgTable("leads", {
   firstName: varchar("first_name", { length: 255 }).notNull(),
   lastName: varchar("last_name", { length: 255 }).notNull(),
   email: varchar("email", { length: 255 }),
-  phone: varchar("phone", { length: 50 }),
+  phone: varchar("phone", { length: 50 }), // Personal/direct phone number (from Get Phone)
+  companyPhone: varchar("company_phone", { length: 50 }), // Official company phone number (displayed on card)
   jobTitle: varchar("job_title", { length: 255 }),
   linkedinUrl: text("linkedin_url"),
   location: varchar("location", { length: 255 }),
