@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 const isProtectedRoute = createRouteMatcher(["/dashboard(.*)"]);
 const isOnboardingRoute = createRouteMatcher(["/onboarding(.*)"]);
 const isPublicApiRoute = createRouteMatcher(["/api/webhooks(.*)"]);
+const isAuthRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)"]);
 
 export default clerkMiddleware(async (auth, req) => {
   // Skip auth for public API routes (webhooks)
@@ -11,6 +12,20 @@ export default clerkMiddleware(async (auth, req) => {
     return;
   }
   const { userId, orgId } = await auth();
+
+  // If user is already authenticated and tries to access sign-in/sign-up pages,
+  // redirect them to dashboard or onboarding (prevents "Session already exists" error)
+  if (isAuthRoute(req) && userId) {
+    if (orgId) {
+      // User has an organization, redirect to dashboard
+      const dashboardUrl = new URL("/dashboard", req.url);
+      return NextResponse.redirect(dashboardUrl);
+    } else {
+      // User is logged in but has no organization, redirect to create one
+      const onboardingUrl = new URL("/onboarding/create-organization", req.url);
+      return NextResponse.redirect(onboardingUrl);
+    }
+  }
 
   // If accessing protected routes, require authentication
   if (isProtectedRoute(req)) {

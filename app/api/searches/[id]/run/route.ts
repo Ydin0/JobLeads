@@ -120,6 +120,76 @@ interface SearchFilters {
   publishedAt?: string;
 }
 
+// Helper function to find or create a company with race condition handling
+async function findOrCreateCompany(
+  orgId: string,
+  searchId: string,
+  companyData: {
+    name: string;
+    linkedinUrl?: string | null;
+    logoUrl?: string | null;
+    websiteUrl?: string | null;
+    metadata?: Record<string, unknown>;
+  }
+): Promise<{ id: string; isNew: boolean }> {
+  const companyKey = companyData.name.toLowerCase();
+
+  // First, try to find existing company
+  const existing = await db.query.companies.findFirst({
+    where: and(
+      eq(companies.orgId, orgId),
+      eq(companies.searchId, searchId),
+      sql`LOWER(${companies.name}) = ${companyKey}`
+    ),
+    columns: { id: true },
+  });
+
+  if (existing) {
+    return { id: existing.id, isNew: false };
+  }
+
+  // Try to insert, but handle race condition where another scraper may have inserted
+  try {
+    const [inserted] = await db
+      .insert(companies)
+      .values({
+        orgId,
+        searchId,
+        name: companyData.name,
+        linkedinUrl: companyData.linkedinUrl,
+        logoUrl: companyData.logoUrl,
+        websiteUrl: companyData.websiteUrl,
+        metadata: companyData.metadata,
+      })
+      .returning();
+
+    if (inserted) {
+      return { id: inserted.id, isNew: true };
+    }
+  } catch (error) {
+    // If insert failed, another scraper likely inserted it - query again
+    log.debug(`Insert failed for company "${companyData.name}", checking if it was inserted by another scraper`);
+  }
+
+  // Query again in case of race condition
+  const existingAfterInsert = await db.query.companies.findFirst({
+    where: and(
+      eq(companies.orgId, orgId),
+      eq(companies.searchId, searchId),
+      sql`LOWER(${companies.name}) = ${companyKey}`
+    ),
+    columns: { id: true },
+  });
+
+  if (existingAfterInsert) {
+    return { id: existingAfterInsert.id, isNew: false };
+  }
+
+  // This shouldn't happen, but log an error if it does
+  log.error(`Failed to find or create company: ${companyData.name}`);
+  throw new Error(`Failed to find or create company: ${companyData.name}`);
+}
+
 // Process job results and store companies, jobs, leads
 async function processJobResults(
   jobResults: LinkedInJobResult[],
@@ -141,51 +211,30 @@ async function processJobResults(
   let newCompanies = 0;
   const companiesToEnrich: Array<{ id: string; name: string; linkedinUrl: string | null }> = [];
 
+  // Process companies sequentially to avoid race conditions
   for (const company of extractedCompanies) {
     const companyKey = company.name.toLowerCase();
 
     // Skip if we already have this company in our map
     if (companyIdMap.has(companyKey)) continue;
 
-    // Check if company already exists in DB (may have been inserted by a parallel scraper)
-    // This is important because there's no unique constraint on (orgId, searchId, name)
-    const existing = await db.query.companies.findFirst({
-      where: and(
-        eq(companies.orgId, orgId),
-        eq(companies.searchId, searchId),
-        sql`LOWER(${companies.name}) = ${companyKey}`
-      ),
-      columns: { id: true },
+    const result = await findOrCreateCompany(orgId, searchId, {
+      name: company.name,
+      linkedinUrl: company.linkedinUrl,
+      logoUrl: company.logoUrl,
+      metadata: {
+        linkedinId: company.linkedinId,
+        jobCount: company.jobCount,
+      },
     });
 
-    if (existing) {
-      // Company already exists, use its ID
-      companyIdMap.set(companyKey, existing.id);
-      continue;
-    }
+    companyIdMap.set(companyKey, result.id);
 
-    // Insert new company
-    const [inserted] = await db
-      .insert(companies)
-      .values({
-        orgId,
-        searchId,
-        name: company.name,
-        linkedinUrl: company.linkedinUrl,
-        logoUrl: company.logoUrl,
-        metadata: {
-          linkedinId: company.linkedinId,
-          jobCount: company.jobCount,
-        },
-      })
-      .returning();
-
-    if (inserted) {
+    if (result.isNew) {
       newCompanies++;
-      companyIdMap.set(companyKey, inserted.id);
       // Queue for auto-enrichment
       companiesToEnrich.push({
-        id: inserted.id,
+        id: result.id,
         name: company.name,
         linkedinUrl: company.linkedinUrl,
       });
@@ -330,6 +379,7 @@ async function processNormalizedJobResults(
   let newCompanies = 0;
   const companiesToEnrich: Array<{ id: string; name: string; linkedinUrl: string | null }> = [];
 
+  // Process companies sequentially to avoid race conditions
   for (const company of extractedCompanies) {
     const companyKey = company.name.toLowerCase();
 
@@ -339,30 +389,25 @@ async function processNormalizedJobResults(
     // Determine if the URL is a LinkedIn URL for enrichment
     const isLinkedInUrl = company.companyUrl?.includes('linkedin.com');
 
-    const [inserted] = await db
-      .insert(companies)
-      .values({
-        orgId,
-        searchId,
-        name: company.name,
-        linkedinUrl: isLinkedInUrl ? company.companyUrl : null,
-        websiteUrl: !isLinkedInUrl && company.companyUrl ? company.companyUrl : null,
-        metadata: {
-          companyId: company.companyId,
-          jobCount: company.jobCount,
-          sources: company.sources,
-        },
-      })
-      .onConflictDoNothing()
-      .returning();
+    const result = await findOrCreateCompany(orgId, searchId, {
+      name: company.name,
+      linkedinUrl: isLinkedInUrl ? company.companyUrl : null,
+      websiteUrl: !isLinkedInUrl && company.companyUrl ? company.companyUrl : null,
+      metadata: {
+        companyId: company.companyId,
+        jobCount: company.jobCount,
+        sources: company.sources,
+      },
+    });
 
-    if (inserted) {
+    companyIdMap.set(companyKey, result.id);
+
+    if (result.isNew) {
       newCompanies++;
-      companyIdMap.set(companyKey, inserted.id);
       // Queue for auto-enrichment if we have a LinkedIn URL
       if (isLinkedInUrl) {
         companiesToEnrich.push({
-          id: inserted.id,
+          id: result.id,
           name: company.name,
           linkedinUrl: company.companyUrl,
         });

@@ -26,6 +26,8 @@ export interface UploadRequest {
   options: {
     updateExisting: boolean
     enrichWithApollo: boolean
+    skipInvalidRows: boolean
+    duplicateHandling: 'skip' | 'update' | 'create'
   }
 }
 
@@ -41,6 +43,8 @@ export interface UploadResponse {
     contactsSkipped: number
     globalCompaniesCreated: number
     globalContactsCreated: number
+    rowsSkippedDueToErrors: number
+    totalRowsProcessed: number
   }
   errors: Array<{ row: number; message: string }>
   enrichmentQueued: boolean
@@ -61,7 +65,7 @@ export async function POST(req: Request) {
 
     const uploadId = generateUploadId()
     const fileName = body.fileName || 'unknown.csv'
-    const { updateExisting } = body.options
+    const { updateExisting, skipInvalidRows = true, duplicateHandling = 'skip' } = body.options
 
     // Parse and validate
     const parseResult = parseCSV(body.csvContent)
@@ -70,10 +74,25 @@ export async function POST(req: Request) {
       body.columnMapping
     )
 
-    if (!validationResult.valid || validationResult.parsedRows.length === 0) {
+    // Check validation results based on skipInvalidRows option
+    const hasRowErrors = validationResult.errors.some(e => e.row !== 0)
+
+    if (!skipInvalidRows && hasRowErrors) {
+      // Don't proceed if there are row errors and skipInvalidRows is false
       return NextResponse.json(
         {
-          error: 'CSV validation failed',
+          error: 'CSV validation failed. Fix all row errors before importing, or enable "Skip invalid rows" option.',
+          errors: validationResult.errors,
+          skippedRows: validationResult.totalRows - validationResult.validRows,
+        },
+        { status: 400 }
+      )
+    }
+
+    if (validationResult.parsedRows.length === 0) {
+      return NextResponse.json(
+        {
+          error: 'No valid rows to import',
           errors: validationResult.errors,
         },
         { status: 400 }
@@ -93,8 +112,14 @@ export async function POST(req: Request) {
       contactsSkipped: 0,
       globalCompaniesCreated: 0,
       globalContactsCreated: 0,
+      rowsSkippedDueToErrors: validationResult.totalRows - validationResult.validRows,
+      totalRowsProcessed: validationResult.validRows,
     }
     const errors: Array<{ row: number; message: string }> = []
+
+    // Determine if we should update or create duplicates based on duplicateHandling
+    const shouldUpdateDuplicates = duplicateHandling === 'update' || updateExisting
+    const shouldCreateDuplicates = duplicateHandling === 'create'
 
     // Process each company and its contacts
     for (const groupedCompany of groupedCompanies) {
@@ -105,7 +130,8 @@ export async function POST(req: Request) {
           userId,
           uploadId,
           fileName,
-          updateExisting
+          shouldUpdateDuplicates,
+          shouldCreateDuplicates
         )
 
         stats.companiesCreated += result.companyCreated ? 1 : 0
@@ -164,7 +190,8 @@ async function processCompanyWithContacts(
   userId: string,
   uploadId: string,
   fileName: string,
-  updateExisting: boolean
+  updateDuplicates: boolean,
+  createDuplicates: boolean
 ): Promise<ProcessResult> {
   const result: ProcessResult = {
     companyCreated: false,
@@ -204,7 +231,7 @@ async function processCompanyWithContacts(
         },
       })
       result.globalCompanyCreated = true
-    } else if (updateExisting) {
+    } else if (updateDuplicates) {
       // Update existing global company
       await db
         .update(globalCompanies)
@@ -235,14 +262,16 @@ async function processCompanyWithContacts(
 
   const companyMetadata = createImportMetadata(uploadId, userId, fileName)
 
-  if (!orgCompany) {
-    // Create new org company
+  if (!orgCompany || createDuplicates) {
+    // Create new org company (or create duplicate if option enabled)
     const [newCompany] = await db
       .insert(companies)
       .values({
         orgId,
-        name: groupedCompany.companyName,
-        domain,
+        name: createDuplicates && orgCompany
+          ? `${groupedCompany.companyName} (imported)`
+          : groupedCompany.companyName,
+        domain: createDuplicates ? null : domain, // Don't set domain for duplicates to avoid conflicts
         industry: groupedCompany.companyIndustry,
         size: groupedCompany.companySize,
         location: groupedCompany.companyLocation,
@@ -255,7 +284,7 @@ async function processCompanyWithContacts(
     orgCompany = newCompany
     result.companyCreated = true
     result.companyId = newCompany.id
-  } else if (updateExisting) {
+  } else if (updateDuplicates) {
     // Update existing org company
     await db
       .update(companies)
@@ -272,6 +301,7 @@ async function processCompanyWithContacts(
     result.companyUpdated = true
     result.companyId = orgCompany.id
   } else {
+    // Skip duplicates (default behavior)
     result.companySkipped = true
     result.companyId = orgCompany.id
   }
@@ -287,7 +317,8 @@ async function processCompanyWithContacts(
         domain,
         uploadId,
         fileName,
-        updateExisting
+        updateDuplicates,
+        createDuplicates
       )
 
       result.contactsCreated += contactResult.created ? 1 : 0
@@ -320,7 +351,8 @@ async function processContact(
   companyDomain: string | null,
   uploadId: string,
   fileName: string,
-  updateExisting: boolean
+  updateDuplicates: boolean,
+  createDuplicates: boolean
 ): Promise<ContactResult> {
   const result: ContactResult = {
     created: false,
@@ -359,7 +391,7 @@ async function processContact(
         fetchedAt: new Date(),
       })
       result.globalCreated = true
-    } else if (updateExisting) {
+    } else if (updateDuplicates) {
       // Update existing global employee
       await db
         .update(globalEmployees)
@@ -399,16 +431,16 @@ async function processContact(
         ),
       })
 
-  if (!existingEmployee) {
-    // Create new org employee
-    const apolloId = email ? generateCsvImportId(email) : null
+  if (!existingEmployee || createDuplicates) {
+    // Create new org employee (or create duplicate if option enabled)
+    const apolloId = email && !createDuplicates ? generateCsvImportId(email) : null
 
     await db.insert(employees).values({
       orgId,
       companyId,
       firstName: contact.firstName,
       lastName: contact.lastName,
-      email,
+      email: createDuplicates ? null : email, // Don't set email for duplicates to avoid conflicts
       phone: contact.phone,
       jobTitle: contact.jobTitle,
       linkedinUrl: contact.linkedinUrl,
@@ -419,10 +451,11 @@ async function processContact(
       metadata: {
         ...contactMetadata,
         source: 'csv_import',
+        duplicateOf: existingEmployee?.id,
       },
     })
     result.created = true
-  } else if (updateExisting) {
+  } else if (updateDuplicates) {
     // Update existing org employee
     await db
       .update(employees)
@@ -439,6 +472,7 @@ async function processContact(
       .where(eq(employees.id, existingEmployee.id))
     result.updated = true
   } else {
+    // Skip duplicates (default behavior)
     result.skipped = true
   }
 

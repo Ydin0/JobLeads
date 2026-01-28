@@ -394,6 +394,15 @@ export default function ICPDetailPage() {
 
             const result = await response.json()
             toast.success(`Found ${result.totalJobsFound} jobs, ${result.totalNewCompanies} new companies.`)
+
+            // Immediately refresh scraper runs to get the final status
+            // This ensures hasActiveScraperRuns becomes false and stops polling
+            const runsResponse = await fetch(`/api/searches/${icpId}/runs`)
+            if (runsResponse.ok) {
+                const runsData = await runsResponse.json()
+                setScraperRuns(runsData.runs || [])
+            }
+
             await fetchData()
         } catch (err) {
             console.error('Error running scrapers:', err)
@@ -412,7 +421,7 @@ export default function ICPDetailPage() {
             }
         } finally {
             setIsRunningScrapers(false)
-            // Don't reset polling timer here - let it continue if there are still running scrapers
+            pollingStartTimeRef.current = null // Reset polling timer since scrapers are done
         }
     }
 

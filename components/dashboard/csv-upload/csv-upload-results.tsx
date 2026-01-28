@@ -101,6 +101,24 @@ export function CSVUploadResults({
         </div>
       </div>
 
+      {/* Processing Summary */}
+      {(stats.rowsSkippedDueToErrors > 0 || stats.totalRowsProcessed > 0) && (
+        <div className="rounded-lg border border-black/5 bg-black/[0.02] p-3 dark:border-white/5 dark:bg-white/[0.02]">
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-black/60 dark:text-white/60">Rows processed</span>
+              <span className="text-black dark:text-white">{stats.totalRowsProcessed}</span>
+            </div>
+            {stats.rowsSkippedDueToErrors > 0 && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-amber-600 dark:text-amber-400">Rows skipped (invalid)</span>
+                <span className="text-amber-600 dark:text-amber-400">{stats.rowsSkippedDueToErrors}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Global Cache Stats */}
       <div className="rounded-lg border border-black/5 bg-black/[0.02] p-3 dark:border-white/5 dark:bg-white/[0.02]">
         <div className="flex items-center gap-2">

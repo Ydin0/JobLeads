@@ -46,6 +46,7 @@ export function CSVUploadModal({ isOpen, onClose }: CSVUploadModalProps) {
     isLoading,
     error,
     options,
+    progress,
     setOptions,
     setFile,
     setColumnMapping,
@@ -210,23 +211,52 @@ export function CSVUploadModal({ isOpen, onClose }: CSVUploadModalProps) {
                   </span>
                 </div>
                 <div className="space-y-3">
+                  {/* Duplicate Handling */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-black dark:text-white">
+                      Duplicate Handling
+                    </label>
+                    <select
+                      value={options.duplicateHandling}
+                      onChange={(e) =>
+                        setOptions({
+                          ...options,
+                          duplicateHandling: e.target.value as 'skip' | 'update' | 'create',
+                          updateExisting: e.target.value === 'update',
+                        })
+                      }
+                      className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-xs text-black focus:border-[var(--theme-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--theme-accent)] dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-purple-500 dark:focus:ring-purple-500"
+                    >
+                      <option value="skip">Skip duplicates (don't import)</option>
+                      <option value="update">Update existing records</option>
+                      <option value="create">Create new records anyway</option>
+                    </select>
+                    <p className="text-[10px] text-black/40 dark:text-white/40">
+                      {options.duplicateHandling === 'skip' && 'Duplicates found by email or domain will be skipped'}
+                      {options.duplicateHandling === 'update' && 'Existing records will be updated with new data'}
+                      {options.duplicateHandling === 'create' && 'New records will be created even if duplicates exist'}
+                    </p>
+                  </div>
+
+                  {/* Skip Invalid Rows */}
                   <label className="flex cursor-pointer items-start gap-3">
                     <input
                       type="checkbox"
-                      checked={options.updateExisting}
-                      onChange={(e) => setOptions({ ...options, updateExisting: e.target.checked })}
+                      checked={options.skipInvalidRows}
+                      onChange={(e) => setOptions({ ...options, skipInvalidRows: e.target.checked })}
                       className="mt-0.5 size-4 rounded border-black/20 text-[var(--theme-accent)] focus:ring-[var(--theme-accent)] dark:border-white/20 dark:text-purple-500 dark:focus:ring-purple-500"
                     />
                     <div>
                       <span className="text-xs font-medium text-black dark:text-white">
-                        Update existing records
+                        Skip invalid rows
                       </span>
                       <p className="text-[10px] text-black/40 dark:text-white/40">
-                        If a company or contact already exists, update their information
+                        Continue importing valid rows even if some rows have validation errors
                       </p>
                     </div>
                   </label>
 
+                  {/* Enrich with Apollo */}
                   <label className="flex cursor-pointer items-start gap-3">
                     <input
                       type="checkbox"
@@ -261,8 +291,33 @@ export function CSVUploadModal({ isOpen, onClose }: CSVUploadModalProps) {
           {step === 'processing' && (
             <div className="flex min-h-[200px] flex-col items-center justify-center">
               <div className="mb-4 size-12 animate-spin rounded-full border-3 border-[var(--theme-accent)]/20 border-t-[var(--theme-accent)] dark:border-purple-500/20 dark:border-t-purple-500" />
-              <p className="text-sm text-black/60 dark:text-white/60">Importing your data...</p>
-              <p className="text-xs text-black/40 dark:text-white/40">This may take a moment</p>
+              <p className="text-sm text-black/60 dark:text-white/60">
+                {progress?.message || 'Importing your data...'}
+              </p>
+              {progress && (
+                <div className="mt-4 w-full max-w-xs">
+                  <div className="mb-1.5 flex items-center justify-between text-xs text-black/40 dark:text-white/40">
+                    <span>
+                      {progress.phase === 'validating' && 'Validating'}
+                      {progress.phase === 'processing' && 'Processing'}
+                      {progress.phase === 'completing' && 'Completing'}
+                    </span>
+                    <span>{Math.round((progress.current / progress.total) * 100)}%</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-[var(--theme-accent)] to-red-500 transition-all duration-300 dark:from-purple-500 dark:to-blue-500"
+                      style={{ width: `${Math.round((progress.current / progress.total) * 100)}%` }}
+                    />
+                  </div>
+                  <p className="mt-1.5 text-center text-[10px] text-black/40 dark:text-white/40">
+                    {progress.current} of {progress.total} rows
+                  </p>
+                </div>
+              )}
+              {!progress && (
+                <p className="text-xs text-black/40 dark:text-white/40">This may take a moment</p>
+              )}
             </div>
           )}
 

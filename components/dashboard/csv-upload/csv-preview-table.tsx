@@ -1,15 +1,36 @@
 'use client'
 
+import { useState } from 'react'
 import { cn } from '@/lib/utils'
-import { Building2, Users, AlertTriangle, CheckCircle, AlertCircle } from 'lucide-react'
+import { Building2, Users, AlertTriangle, CheckCircle, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import type { PreviewResponse } from '@/app/api/csv-upload/preview/route'
 
 interface CSVPreviewTableProps {
   previewData: PreviewResponse
 }
 
+// Group errors and warnings by row number
+function groupByRow(items: Array<{ row: number; field: string; message: string }>) {
+  const grouped = new Map<number, Array<{ field: string; message: string }>>()
+  for (const item of items) {
+    if (!grouped.has(item.row)) {
+      grouped.set(item.row, [])
+    }
+    grouped.get(item.row)!.push({ field: item.field, message: item.message })
+  }
+  return grouped
+}
+
 export function CSVPreviewTable({ previewData }: CSVPreviewTableProps) {
   const { preview, deduplication, errors, warnings, validRows, totalRows } = previewData
+  const [showAllErrors, setShowAllErrors] = useState(false)
+
+  // Group errors by row for better display
+  const errorsByRow = groupByRow(errors)
+  const warningsByRow = groupByRow(warnings)
+  const uniqueErrorRows = Array.from(errorsByRow.keys()).sort((a, b) => a - b)
+  const uniqueWarningRows = Array.from(warningsByRow.keys()).sort((a, b) => a - b)
+  const displayedErrorRows = showAllErrors ? uniqueErrorRows : uniqueErrorRows.slice(0, 5)
 
   return (
     <div className="space-y-4">
@@ -37,54 +58,91 @@ export function CSVPreviewTable({ previewData }: CSVPreviewTableProps) {
         <StatCard
           icon={AlertTriangle}
           label="Issues"
-          value={errors.length + warnings.length}
-          subLabel={`${errors.length} errors`}
+          value={uniqueErrorRows.length + uniqueWarningRows.length}
+          subLabel={`${uniqueErrorRows.length} rows with errors`}
           variant={errors.length > 0 ? 'error' : warnings.length > 0 ? 'warning' : 'default'}
         />
       </div>
 
-      {/* Errors */}
+      {/* Errors - Grouped by Row */}
       {errors.length > 0 && (
         <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3">
-          <div className="mb-2 flex items-center gap-2">
-            <AlertCircle className="size-4 text-red-500" />
-            <span className="text-xs font-medium text-red-600 dark:text-red-400">
-              {errors.length} Validation Errors
-            </span>
-          </div>
-          <div className="max-h-24 space-y-1 overflow-y-auto">
-            {errors.slice(0, 5).map((error, i) => (
-              <p key={i} className="text-xs text-red-600/80 dark:text-red-400/80">
-                Row {error.row}: {error.message}
-              </p>
-            ))}
-            {errors.length > 5 && (
-              <p className="text-xs text-red-600/60 dark:text-red-400/60">
-                +{errors.length - 5} more errors
-              </p>
+          <div className="mb-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="size-4 text-red-500" />
+              <span className="text-xs font-medium text-red-600 dark:text-red-400">
+                {uniqueErrorRows.length} Rows with Validation Errors
+              </span>
+            </div>
+            {uniqueErrorRows.length > 5 && (
+              <button
+                onClick={() => setShowAllErrors(!showAllErrors)}
+                className="flex items-center gap-1 text-[10px] text-red-600/70 hover:text-red-600 dark:text-red-400/70 dark:hover:text-red-400"
+              >
+                {showAllErrors ? (
+                  <>
+                    Show less <ChevronUp className="size-3" />
+                  </>
+                ) : (
+                  <>
+                    Show all ({uniqueErrorRows.length}) <ChevronDown className="size-3" />
+                  </>
+                )}
+              </button>
             )}
+          </div>
+          <div className="max-h-48 space-y-2 overflow-y-auto">
+            {displayedErrorRows.map((rowNum) => {
+              const rowErrors = errorsByRow.get(rowNum) || []
+              return (
+                <div key={rowNum} className="rounded border border-red-500/10 bg-red-500/5 p-2">
+                  <div className="mb-1 text-[10px] font-medium text-red-700 dark:text-red-300">
+                    Row {rowNum}
+                  </div>
+                  <div className="space-y-0.5">
+                    {rowErrors.map((err, i) => (
+                      <p key={i} className="text-xs text-red-600/80 dark:text-red-400/80">
+                        <span className="font-medium">{err.field}:</span> {err.message}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
 
-      {/* Warnings */}
+      {/* Warnings - Grouped by Row */}
       {warnings.length > 0 && (
         <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
           <div className="mb-2 flex items-center gap-2">
             <AlertTriangle className="size-4 text-amber-500" />
             <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
-              {warnings.length} Warnings
+              {uniqueWarningRows.length} Rows with Warnings
             </span>
           </div>
-          <div className="max-h-24 space-y-1 overflow-y-auto">
-            {warnings.slice(0, 3).map((warning, i) => (
-              <p key={i} className="text-xs text-amber-600/80 dark:text-amber-400/80">
-                Row {warning.row}: {warning.message}
-              </p>
-            ))}
-            {warnings.length > 3 && (
+          <div className="max-h-32 space-y-2 overflow-y-auto">
+            {uniqueWarningRows.slice(0, 3).map((rowNum) => {
+              const rowWarnings = warningsByRow.get(rowNum) || []
+              return (
+                <div key={rowNum} className="rounded border border-amber-500/10 bg-amber-500/5 p-2">
+                  <div className="mb-1 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                    Row {rowNum}
+                  </div>
+                  <div className="space-y-0.5">
+                    {rowWarnings.map((warn, i) => (
+                      <p key={i} className="text-xs text-amber-600/80 dark:text-amber-400/80">
+                        <span className="font-medium">{warn.field}:</span> {warn.message}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+            {uniqueWarningRows.length > 3 && (
               <p className="text-xs text-amber-600/60 dark:text-amber-400/60">
-                +{warnings.length - 3} more warnings
+                +{uniqueWarningRows.length - 3} more rows with warnings
               </p>
             )}
           </div>

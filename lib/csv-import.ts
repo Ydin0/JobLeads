@@ -1,8 +1,23 @@
 // CSV Import Utility Library
-// Handles parsing, validation, and field mapping for CSV uploads
+// Handles parsing, validation, and field mapping for CSV/XLSX uploads
 
 import Papa from 'papaparse'
+import * as XLSX from 'xlsx'
 import { createHash } from 'crypto'
+
+// ============================================
+// FILE HANDLING CONSTANTS
+// ============================================
+
+export const MAX_FILE_SIZE_MB = 10
+export const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+export const SUPPORTED_FILE_TYPES = ['.csv', '.xlsx', '.xls'] as const
+export const SUPPORTED_MIME_TYPES = [
+  'text/csv',
+  'application/csv',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+] as const
 
 // ============================================
 // FIELD DEFINITIONS
@@ -611,4 +626,279 @@ export const CSV_TEMPLATE_EXAMPLE_ROWS = [
 export function generateCSVTemplate(): string {
   const rows = [CSV_TEMPLATE_HEADERS, ...CSV_TEMPLATE_EXAMPLE_ROWS]
   return Papa.unparse(rows)
+}
+
+// ============================================
+// FILE VALIDATION
+// ============================================
+
+export interface FileValidationResult {
+  valid: boolean
+  error?: string
+  fileType?: 'csv' | 'xlsx' | 'xls'
+}
+
+export function validateFile(file: File): FileValidationResult {
+  // Check file size
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    return {
+      valid: false,
+      error: `File size exceeds ${MAX_FILE_SIZE_MB}MB limit. Please use a smaller file or split it into multiple files.`,
+    }
+  }
+
+  // Check file extension
+  const extension = '.' + file.name.split('.').pop()?.toLowerCase()
+  if (!SUPPORTED_FILE_TYPES.includes(extension as typeof SUPPORTED_FILE_TYPES[number])) {
+    return {
+      valid: false,
+      error: `Unsupported file type. Please upload a CSV or Excel file (${SUPPORTED_FILE_TYPES.join(', ')}).`,
+    }
+  }
+
+  // Determine file type
+  let fileType: 'csv' | 'xlsx' | 'xls'
+  if (extension === '.csv') {
+    fileType = 'csv'
+  } else if (extension === '.xlsx') {
+    fileType = 'xlsx'
+  } else {
+    fileType = 'xls'
+  }
+
+  return { valid: true, fileType }
+}
+
+// ============================================
+// XLSX PARSING
+// ============================================
+
+export function parseXLSX(buffer: ArrayBuffer): ParseResult {
+  const workbook = XLSX.read(buffer, { type: 'array' })
+
+  // Get the first sheet
+  const sheetName = workbook.SheetNames[0]
+  if (!sheetName) {
+    throw new Error('Excel file has no sheets')
+  }
+
+  const sheet = workbook.Sheets[sheetName]
+
+  // Convert to array of arrays
+  const data = XLSX.utils.sheet_to_json<string[]>(sheet, {
+    header: 1,
+    defval: '',
+    blankrows: false,
+  })
+
+  if (data.length === 0) {
+    throw new Error('Excel file is empty')
+  }
+
+  // Filter out completely empty rows
+  const filteredData = data.filter(row =>
+    row.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== '')
+  )
+
+  if (filteredData.length === 0) {
+    throw new Error('Excel file has no data rows')
+  }
+
+  const headers = filteredData[0].map(h => String(h || '').trim())
+  const dataRows = filteredData.slice(1).map(row =>
+    row.map(cell => String(cell || '').trim())
+  )
+
+  return {
+    headers,
+    rows: dataRows,
+    totalRows: dataRows.length,
+  }
+}
+
+// ============================================
+// UNIFIED FILE PARSING
+// ============================================
+
+export interface ParseFileOptions {
+  content: string | ArrayBuffer
+  fileType: 'csv' | 'xlsx' | 'xls'
+}
+
+export function parseFile(options: ParseFileOptions): ParseResult {
+  if (options.fileType === 'csv') {
+    return parseCSV(options.content as string)
+  } else {
+    return parseXLSX(options.content as ArrayBuffer)
+  }
+}
+
+// ============================================
+// MAPPING TEMPLATES
+// ============================================
+
+export interface MappingTemplate {
+  id: string
+  name: string
+  createdAt: string
+  mapping: ColumnMapping
+}
+
+const MAPPING_TEMPLATES_STORAGE_KEY = 'csv_mapping_templates'
+
+export function saveMappingTemplate(name: string, mapping: ColumnMapping): MappingTemplate {
+  const templates = getMappingTemplates()
+
+  const newTemplate: MappingTemplate = {
+    id: `template_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+    name,
+    createdAt: new Date().toISOString(),
+    mapping,
+  }
+
+  templates.push(newTemplate)
+
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(MAPPING_TEMPLATES_STORAGE_KEY, JSON.stringify(templates))
+  }
+
+  return newTemplate
+}
+
+export function getMappingTemplates(): MappingTemplate[] {
+  if (typeof window === 'undefined') {
+    return []
+  }
+
+  try {
+    const stored = localStorage.getItem(MAPPING_TEMPLATES_STORAGE_KEY)
+    return stored ? JSON.parse(stored) : []
+  } catch {
+    return []
+  }
+}
+
+export function deleteMappingTemplate(id: string): void {
+  const templates = getMappingTemplates().filter(t => t.id !== id)
+
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(MAPPING_TEMPLATES_STORAGE_KEY, JSON.stringify(templates))
+  }
+}
+
+// ============================================
+// ENHANCED VALIDATION
+// ============================================
+
+export interface RowValidationResult {
+  rowNumber: number
+  isValid: boolean
+  errors: Array<{ field: string; message: string }>
+  warnings: Array<{ field: string; message: string }>
+  data: ParsedRow | null
+}
+
+export function validateRow(
+  row: string[],
+  rowNumber: number,
+  mapping: ColumnMapping
+): RowValidationResult {
+  const errors: Array<{ field: string; message: string }> = []
+  const warnings: Array<{ field: string; message: string }> = []
+
+  const parsedRow: ParsedRow = {
+    rowNumber,
+    companyName: '',
+    companyDomain: null,
+    companyIndustry: null,
+    companySize: null,
+    companyLocation: null,
+    companyLinkedinUrl: null,
+    companyWebsiteUrl: null,
+    contactFirstName: '',
+    contactLastName: '',
+    contactEmail: null,
+    contactPhone: null,
+    contactJobTitle: null,
+    contactLinkedinUrl: null,
+    contactLocation: null,
+    contactSeniority: null,
+    contactDepartment: null,
+  }
+
+  for (const field of CSV_FIELDS) {
+    const colIndex = mapping[field.key]
+    let value = colIndex !== null && colIndex !== undefined ? (row[colIndex] || '').trim() : ''
+
+    // Apply transformer if present
+    if (value && field.transformer) {
+      value = field.transformer(value)
+    }
+
+    // Validate
+    if (field.validator && value) {
+      const validation = field.validator(value)
+      if (!validation.valid) {
+        warnings.push({
+          field: field.label,
+          message: validation.error || 'Invalid value',
+        })
+      }
+    }
+
+    // Check required fields
+    if (field.required && !value) {
+      errors.push({
+        field: field.label,
+        message: `${field.label} is required`,
+      })
+    }
+
+    // Set value in parsed row
+    ;(parsedRow as unknown as Record<string, string | null>)[field.key] = value || null
+  }
+
+  return {
+    rowNumber,
+    isValid: errors.length === 0,
+    errors,
+    warnings,
+    data: errors.length === 0 ? parsedRow : null,
+  }
+}
+
+export function validateAllRows(
+  rows: string[][],
+  mapping: ColumnMapping,
+  options: { skipInvalidRows?: boolean } = {}
+): {
+  results: RowValidationResult[]
+  validRows: ParsedRow[]
+  invalidRowNumbers: number[]
+  totalValid: number
+  totalInvalid: number
+} {
+  const results: RowValidationResult[] = []
+  const validRows: ParsedRow[] = []
+  const invalidRowNumbers: number[] = []
+
+  for (let i = 0; i < rows.length; i++) {
+    const rowNumber = i + 2 // +2 because CSV is 1-indexed and we skip header
+    const result = validateRow(rows[i], rowNumber, mapping)
+    results.push(result)
+
+    if (result.isValid && result.data) {
+      validRows.push(result.data)
+    } else {
+      invalidRowNumbers.push(rowNumber)
+    }
+  }
+
+  return {
+    results,
+    validRows: options.skipInvalidRows ? validRows : validRows,
+    invalidRowNumbers,
+    totalValid: validRows.length,
+    totalInvalid: invalidRowNumbers.length,
+  }
 }
